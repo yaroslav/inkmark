@@ -176,7 +176,7 @@ jobs:
           docker run --rm --platform=${{ matrix.docker_platform }} \
             -v "$PWD:/work" -w /work \
             ${{ matrix.docker_image }} \
-            bash -c 'gem install pkg/*.gem && ruby smoke.rb'
+            sh -c 'gem install pkg/*.gem && ruby smoke.rb'
 
   # Publish: create git tag + GitHub Release (atomic) + push to RubyGems via OIDC.
   publish:
