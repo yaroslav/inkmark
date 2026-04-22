@@ -9,9 +9,12 @@ GEM
   specs:
     ast (2.4.3)
     benchmark-ips (2.14.0)
-    commonmarker (2.8.1)
-      rb_sys (~> 0.9)
+    commonmarker (2.8.1-aarch64-linux)
+    commonmarker (2.8.1-aarch64-linux-musl)
     commonmarker (2.8.1-arm64-darwin)
+    commonmarker (2.8.1-x64-mingw-ucrt)
+    commonmarker (2.8.1-x86_64-linux)
+    commonmarker (2.8.1-x86_64-linux-musl)
     date (3.5.1)
     diff-lcs (1.6.2)
     erb (6.0.2)
@@ -114,7 +117,12 @@ GEM
     yard (0.9.41)
 
 PLATFORMS
-  arm64-darwin-25
+  aarch64-linux
+  aarch64-linux-musl
+  arm64-darwin
+  x64-mingw-ucrt
+  x86_64-linux
+  x86_64-linux-musl
 
 DEPENDENCIES
   benchmark-ips (~> 2.14)
@@ -136,8 +144,12 @@ DEPENDENCIES
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   benchmark-ips (2.14.0) sha256=b72bc8a65d525d5906f8cd94270dccf73452ee3257a32b89fbd6684d3e8a9b1d
-  commonmarker (2.8.1) sha256=f78caf3cfc671fc64e85c9f49eaab0fb4ed3a96e5489be6cc7f59065768cf63e
+  commonmarker (2.8.1-aarch64-linux) sha256=f855599cc6855f4137d72dcacae9571451075afe6e6c8522eba353df9b81d0bf
+  commonmarker (2.8.1-aarch64-linux-musl) sha256=bbc2b3d361403431a5aac737dc86997d3b2843276ef395e7499cf17ad48e1b2c
   commonmarker (2.8.1-arm64-darwin) sha256=cf75760122d6e1c3f8626b5a6911636d2e0aaa26fa8dd377fea440a49c854b3e
+  commonmarker (2.8.1-x64-mingw-ucrt) sha256=627cc46f1b7e4d341e89d3da10ebe6964db02e50e16c7e0b44164b2562f9bfc8
+  commonmarker (2.8.1-x86_64-linux) sha256=c8f2e903c6ee4e2c7e280aa8b49ef37c53202d388e3a2ee06dfdccc8c6fb634f
+  commonmarker (2.8.1-x86_64-linux-musl) sha256=9b6305ce47e0d444b77dabf1762bf76085c2f7963b63c25c02ec36edcf06c785
   date (3.5.1) sha256=750d06384d7b9c15d562c76291407d89e368dda4d4fff957eb94962d325a0dc0
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   erb (6.0.2) sha256=9fe6264d44f79422c87490a1558479bd0e7dad4dd0e317656e67ea3077b5242b
