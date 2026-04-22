@@ -17,7 +17,13 @@ opt-level     = 3
 lto           = "fat"
 codegen-units = 1
 debug         = true
-strip         = "none"
+# Keep `debug = true` for local release builds (full DWARF in target/), but
+# strip DWARF from the shipped binaries. Without this, every cross-compiled
+# .so/.dll carries ~30MB of DWARF per Ruby ABI — Mach-O splits DWARF into a
+# separate .dSYM bundle so darwin gems never had this cost. "debuginfo" drops
+# DWARF while preserving the symbol table, so panic backtraces still include
+# function names (no file:line) and `perf`/flamegraphs still resolve symbols.
+strip         = "debuginfo"
 incremental   = false
 
 [profile.test]
