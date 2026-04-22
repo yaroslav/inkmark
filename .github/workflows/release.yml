@@ -81,10 +81,18 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # Do NOT use `bundler-cache: true` here: it would populate ./vendor/bundle
+      # with gems compiled against the runner's glibc (2.39) and for Ruby 4.0
+      # only. `rb-sys-dock` then mounts the checkout into a manylinux container
+      # (older glibc) running Ruby 3.3/3.4/4.0 and tries to reuse those binaries,
+      # which fails with either `GLIBC_2.38 not found` on native gems like
+      # `date`, or `cannot load such file -- rspec/core/rake_task` when the
+      # container's non-4.0 Ruby can't find any gems under vendor/bundle/ruby/4.0.0.
+      # cross-gem installs `rb_sys` itself via `gem install`, so host bundler
+      # cache is unnecessary here.
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
-          bundler-cache: true
 
       - uses: oxidize-rb/actions/cross-gem@v1
         id: cross-gem
