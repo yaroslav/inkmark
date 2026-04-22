@@ -1,6 +1,6 @@
 # Inkmark
 
-A very fast, feature-packed, AI-first markdown gem for Ruby.
+A very fast, feature-packed, AI-first Markdown gem for Ruby.
 
 [![GitHub Release](https://img.shields.io/github/v/release/yaroslav/inkmark)](https://github.com/yaroslav/inkmark/releases)
 [![Docs](https://img.shields.io/badge/yard-docs-blue.svg)](https://rubydoc.info/gems/inkmark)
@@ -12,8 +12,8 @@ A very fast, feature-packed, AI-first markdown gem for Ruby.
 - **Very fast**. Up to 1.3× faster than redcarpet _(not CommonMark-conformant)_, about 3×–9× faster than other Ruby Markdown gems with native extensions. Built with Rust, based on [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark), uses SIMD.
 - **No surprises**. CommonMark + GitHub Flavored Markdown conformance.
 - **"Batteries included" approach**. Build lots of useful features, make them easy to use and as fast as possible.
-- **Easy to use**. As simple as a one-method API. Pass options inline as a hash, set them one by one, or set default options for the entire application. 
-- **Feature-packed**. Server-side syntax highlighting with themes, frontmatter support, table of contents in Markdown and HTML, plain text export, extraction of headers/links/images, statistics (character and word count, likely document language, blocks count), lazy image loading attributes, emoji shortcodes, autolinks, heading IDs with Unicode-transliterated slugs, wikilinks, footnotes, tables, task lists, smart punctuation, hard wraps, "nofollow/noopener" on external links.
+- **Easy to use**. As simple as a one-method API. Pass options inline as a hash, set them one by one, or set default options for the entire application.
+- **Feature-packed**. Server-side syntax highlighting with themes, frontmatter support, table of contents in Markdown and HTML, plain text export, extraction of headings/links/images, statistics (character and word count, likely document language, blocks count), lazy image loading attributes, emoji shortcodes, autolinks, heading IDs with Unicode-transliterated slugs, wikilinks, footnotes, tables, task lists, smart punctuation, hard wraps, "nofollow/noopener" on external links.
 - **AI-first**. Two chunking primitives: heading-based with breadcrumbs and per-chunk character/word counts, and sliding-window with overlap for size-bounded chunks where headings are absent or uneven. Block-aware or word-aware truncation for context-window budgeting. Markdown-to-Markdown pipeline. Plain-text extraction for embedding models. Structured extraction of headings, images, links, code blocks—each carrying byte ranges back into the source.
 - **Security conscious**. Raw HTML denied by default. Hostname and URL-scheme allowlists for both links and images. GFM tagfilter for dangerous tags. A Rust-backed gem.
 - **Easy extension API**. Hook any element with a Ruby block—no subclassing, no intermediate AST, no HTML post-processing. Rewrite URLs, swap code blocks for your own renderer, drop subtrees, or just walk the document for analysis. Handlers fire inside the single-pass parser, so extension costs essentially nothing beyond the render itself—and far less than regexing over output HTML.
@@ -91,7 +91,7 @@ for nested element-policy hashes). You can—and are recommended to!—override 
 - **`:trusted`**: `:recommended` plus raw HTML pass-through.
   **Dangerous.** Intended only for content you fully trust: internal,
   team-authored. With raw HTML on, Inkmark does no sanitization beyond
-  the narrow GFM tagfilter (turn it off on your own risk); the caller is
+  the narrow GFM tagfilter (turn it off at your own risk); the caller is
   responsible for output safety. Do not apply this preset to anything a user can influence, directly or indirectly.
 
 - **`:gfm`**: the bare default. CommonMark plus the core GFM extensions
@@ -129,7 +129,7 @@ Inkmark.to_html(internal_doc, options: { preset: :trusted })
 ## Options
 
 GFM extensions are on by default; raw HTML rendering is off by default.
-Pass a hash to `Inkmark.to_html` / `Inkmark.new`, or mutate a `Inkmark::Options`
+Pass a hash to `Inkmark.to_html` / `Inkmark.new`, or mutate an `Inkmark::Options`
 instance via its accessors.
 
 | Key | Default | Description |
@@ -158,7 +158,7 @@ instance via its accessors.
 | `wikilinks` | `false` | `[[Page]]` and `[[Page\|label]]` render as links. |
 | `frontmatter` | `false` | Frontmatter (YAML metadata at the start of the document). Parsed and exposed via `Inkmark#frontmatter`; the block is stripped from rendered output. |
 
-Options can be supplied either way:
+Options can be supplied in several ways:
 
 ```ruby
 # As a hash at construction
@@ -185,7 +185,7 @@ Inkmark.new("x", options: { taples: true })
 
 ## Raw HTML
 
-Raw HTML is suppressed by default. This is safe-by-default for rendering untrusted markdown:
+Raw HTML is suppressed by default. This is safe-by-default for rendering untrusted Markdown:
 
 ```ruby
 Inkmark.to_html("<script>alert(1)</script>")
@@ -248,7 +248,7 @@ relative URLs.
 
 ## URL scheme filtering
 
-For rendering untrusted markdown, opt in to scheme allowlists to block
+For rendering untrusted Markdown, opt in to scheme allowlists to block
 `javascript:`, `data:`, and other dangerous URL schemes in links and
 images:
 
@@ -274,7 +274,7 @@ Inkmark.to_html("![pic](data:image/svg+xml,<svg/onload=evil()>)",
 # => "<p>pic</p>\n"   # dropped to alt text
 ```
 
-**Scope:** scheme filtering applies to markdown-emitted links and images
+**Scope:** scheme filtering applies to Markdown-emitted links and images
 (`[text](url)` / `![alt](url)`). Raw HTML `<a href>` / `<img src>` inside
 `raw_html: true` content is *not* filtered—for that case use a
 downstream HTML sanitizer like Loofah.
@@ -394,7 +394,7 @@ parent. Root-level sections and the preamble have an empty array. Skipped
 levels are omitted, so an `###` directly under an `#` has `breadcrumb:
 ["Top"]`, not `["Top", nil]`. RAG pipelines typically prepend the
 breadcrumb to each chunk before embedding—it gives the vector model a
-cheap signal about the chunk's place in the document:
+cheap signal about the chunk's place in the document.
 
 Enable `statistics: true` to add `:character_count` and `:word_count` to
 every section entry. Counts reflect the section's filter-applied text
@@ -460,7 +460,7 @@ embedding quality for downstream semantic search.
 sections = Inkmark.chunks_by_heading(doc, options: {
   emoji_shortcodes: true,    # keep—improves semantic signal
   links: {
-    autolink:        true,                # keep—proper anchor markdown
+    autolink:        true,                # keep—proper anchor Markdown
     allowed_schemes: %w[http https mailto], # keep—safe URLs
     nofollow:        false                 # off—would embed <a rel=...> HTML
   },
@@ -907,7 +907,10 @@ Use `parent_kind` and `ancestor_kinds` for context-sensitive decisions:
 md.on(:image) { |img| img.delete if img.ancestor_kinds.include?(:link) }
 
 # Only process top-level paragraphs
-md.on(:paragraph) { |p| next unless p.parent_kind.nil? }
+md.on(:paragraph) do |p|
+  next unless p.parent_kind.nil?
+  # ... only top-level paragraphs reach here
+end
 ```
 
 `depth` gives the nesting level (0 = top-level block):
@@ -927,7 +930,7 @@ original source to recover the raw Markdown for any element:
 source = File.read("post.md")
 md = Inkmark.new(source)
 md.on(:heading) do |h|
-  puts "#{h.byte_range}: #{source[h.byte_range].inspect}"
+  puts "#{h.byte_range}: #{source.byteslice(h.byte_range).inspect}"
 end
 md.walk
 ```
@@ -939,7 +942,7 @@ and `:hard_break`. Also `nil` for `:link` when `links: { autolink: true }` is en
 
 ### Event object reference
 
-Every handler receives a `Inkmark::Event` with these fields and methods:
+Every handler receives an `Inkmark::Event` with these fields and methods:
 
 | Field / method | Type | Description |
 |---|---|---|
@@ -972,7 +975,7 @@ Every handler receives a `Inkmark::Event` with these fields and methods:
 | `:list` |—| `html=`, `markdown=` |
 | `:ordered_list` |—| `html=`, `markdown=` |
 | `:list_item` | `text` | `html=`, `markdown=` |
-| `:code_block` | `text`, `lang` | `html=`, `markdown=` |
+| `:code_block` | `text` (alias `source`), `lang` | `html=`, `markdown=` |
 | `:table` |—| `html=`, `markdown=` |
 | `:table_head` |—| `html=`, `markdown=` |
 | `:table_row` | `text` | `html=`, `markdown=` |
@@ -1023,7 +1026,7 @@ Post-render filters (`syntax_highlight`, allowlists, `images: { lazy: true }`,
 
 Inkmark ships a benchmark harness comparing it against `kramdown`,
 `commonmarker`, `redcarpet`, `markly`, and `rdiscount` on a sweep of real
-markdown inputs. 
+Markdown inputs.
 
 Measuring apples to apples: every adapter is tuned for **feature parity** with
 Inkmark's defaults—CommonMark + core GFM (tables, strikethrough, tasklists,

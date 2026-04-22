@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Yaroslav Markin"]
   spec.email = ["yaroslav@markin.net"]
 
-  spec.summary = "Very fast, feature-packed, AI-first markdown gem for Ruby."
-  spec.description = "A very fast, feature-packed, AI-first markdown (CommonMark/GFM) gem for Ruby, based on pulldown-cmark (Rust)."
+  spec.summary = "Very fast, feature-packed, AI-first Markdown gem for Ruby."
+  spec.description = "A very fast, feature-packed, AI-first Markdown (CommonMark/GFM) gem for Ruby, based on pulldown-cmark (Rust)."
   spec.homepage = "https://github.com/yaroslav/inkmark"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3.0"
