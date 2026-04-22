@@ -1,0 +1,27 @@
+[workspace]
+members = ["./ext/inkmark"]
+resolver = "2"
+
+# panic stays on the Rust default (unwind) in every profile: magnus catches
+# Rust panics at the FFI boundary and converts them to Ruby exceptions,
+# which only works under panic = unwind.
+
+[profile.dev]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+incremental   = false
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+debug         = true
+strip         = "none"
+incremental   = false
+
+[profile.test]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+incremental   = false

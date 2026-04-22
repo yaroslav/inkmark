@@ -1,0 +1,63 @@
+This directory contains third-party markdown files used for benchmarking.
+All files remain under their original licenses.
+
+benchmarks/assets/commonmarker-readme.md
+  Source:    https://github.com/gjtorikian/commonmarker/blob/31016cfad801c058bd69f69ed2372c124e8895ec/README.md
+  Project:   commonmarker
+  Author:    Garen J. Torikian
+  License:   MIT
+  Retrieved: 2026-04-14
+
+benchmarks/assets/redcarpet-readme.md
+  Source:    https://github.com/vmg/redcarpet/blob/34c138e3f14931a0a7b4014916e1e521debbfa68/README.markdown
+  Project:   redcarpet
+  Authors:   Vicent Martí and contributors
+  License:   MIT
+  Retrieved: 2026-04-14
+
+benchmarks/assets/redcarpet-benchmark.md
+  Source:    https://github.com/vmg/redcarpet/blob/34c138e3f14931a0a7b4014916e1e521debbfa68/test/fixtures/benchmark.md
+  Project:   redcarpet (test fixture — redcarpet's own benchmark input)
+  Origin:    Markdown 1.0.1 reference document by John Gruber (Daring Fireball)
+  License:   MIT (as vendored by redcarpet)
+  Retrieved: 2026-04-14
+  Note:      This is the Markdown 1.0.1 reference/syntax document that redcarpet
+             uses to benchmark itself. Including it lets Inkmark compete on the
+             same input redcarpet was optimized against.
+
+benchmarks/assets/commonmark-spec.md
+  Source:    https://github.com/commonmark/commonmark-spec/blob/31c0ca2d294ea60ab4438004da410e2e590a46f2/spec.txt
+  Project:   CommonMark spec
+  Authors:   John MacFarlane and contributors
+  License:   CC-BY-SA 4.0
+  Retrieved: 2026-04-14
+
+benchmarks/assets/tiny-256b.md
+  Source:    https://github.com/pulldown-cmark/pulldown-cmark/blob/affc5be6fa0d5a57c0b1510f59d7bf472c73a2bc/README.md
+  Project:   pulldown-cmark
+  Authors:   pulldown-cmark contributors
+  License:   MIT
+  Retrieved: 2026-04-14
+
+benchmarks/assets/small-512b.md
+  Source:    https://github.com/ohler55/oj/blob/ca20d5b548262bdf25b131bfbf19fd5564b29de8/SECURITY.md
+  Project:   oj
+  Authors:   Peter Ohler and contributors
+  License:   MIT
+  Retrieved: 2026-04-14
+
+benchmarks/assets/medium-1k.md
+  Source:    https://github.com/lostisland/faraday/blob/81dc1688742ad30fa747daba5a82592a1e4df8a8/README.md
+  Project:   faraday
+  Authors:   Rick Olson, Zack Hobson and contributors
+  License:   MIT
+  Note:      First 15 lines (through end of "Why use Faraday?" section)
+  Retrieved: 2026-04-14
+
+benchmarks/assets/large-4k.md
+  Source:    https://github.com/bkeepers/dotenv/blob/34156bf400cd67387fa6ed9f146778f6a2f5f743/README.md
+  Project:   dotenv
+  Authors:   Brandon Keepers and contributors
+  License:   MIT
+  Note:      First 100 lines (through end of CLI "-i/--ignore" example)
+  Retrieved: 2026-04-14

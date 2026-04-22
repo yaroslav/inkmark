@@ -1,0 +1,219 @@
+class Inkmark
+  VERSION: String
+
+  class Error < StandardError
+  end
+
+  class Options
+    type key = Symbol
+    type value = bool | String | Integer | Array[String] | Hash[Symbol, untyped] | nil
+    type defaults_hash = Hash[key, value]
+
+    # Nested element-policy hash types. Writers accept partial hashes
+    # (deep-merge semantics) so any subset of keys is valid on write;
+    # readers return the full hash with defaults filled in.
+    type headings_options = { attributes: bool, ids: bool }
+    type images_options = {
+      lazy: bool,
+      allowed_hosts: Array[String]?,
+      allowed_schemes: Array[String]?
+    }
+    type links_options = {
+      autolink: bool,
+      nofollow: bool,
+      allowed_hosts: Array[String]?,
+      allowed_schemes: Array[String]?
+    }
+
+    DEFAULTS: defaults_hash
+    PRESETS: Hash[Symbol, Hash[Symbol, untyped]]
+    DEFAULT_PRESET: Symbol
+    PRESETS_NATIVE_HASH: Hash[Symbol, Hash[Symbol, untyped]]
+
+    # +overrides+ accepts every option key, plus the pseudo-option
+    # +:preset+ (Symbol) which names a bundle from {PRESETS}.
+    def initialize: (?Hash[Symbol, untyped] overrides) -> void
+    def []: (key key) -> value
+    def []=: (key key, value value) -> value
+    def to_h: () -> defaults_hash
+    def to_native_hash: () -> Hash[Symbol, untyped]
+    def to_native_hash_frozen: () -> Hash[Symbol, untyped]
+    def merge: (defaults_hash | Inkmark::Options other) -> Inkmark::Options
+    def ==: (untyped other) -> bool
+    alias eql? ==
+    def initialize_copy: (Inkmark::Options orig) -> void
+
+    # Class-method fast path that skips allocating an Options instance.
+    # Marked +@api private+ in YARD; surfaced here because specs and
+    # the Inkmark class-method layer call it with an explicit receiver.
+    def self.native_hash_from: (Hash[Symbol, untyped] overrides) -> Hash[Symbol, untyped]
+
+    # Auto-generated accessors—one pair per DEFAULTS key.
+    def gfm: () -> bool
+    def gfm=: (bool) -> bool
+    def gfm_tag_filter: () -> bool
+    def gfm_tag_filter=: (bool) -> bool
+    def tables: () -> bool
+    def tables=: (bool) -> bool
+    def strikethrough: () -> bool
+    def strikethrough=: (bool) -> bool
+    def tasklists: () -> bool
+    def tasklists=: (bool) -> bool
+    def footnotes: () -> bool
+    def footnotes=: (bool) -> bool
+    def raw_html: () -> bool
+    def raw_html=: (bool) -> bool
+    def smart_punctuation: () -> bool
+    def smart_punctuation=: (bool) -> bool
+    # Readers return the full merged nested hash; writers accept and
+    # return the caller's *partial* hash (deep-merge semantics apply
+    # inside, so a partial input is legal and the Ruby +x = v+ form
+    # evaluates to +v+ as passed).
+    def headings: () -> headings_options
+    def headings=: (Hash[Symbol, untyped] value) -> Hash[Symbol, untyped]
+    def images: () -> images_options
+    def images=: (Hash[Symbol, untyped] value) -> Hash[Symbol, untyped]
+    def links: () -> links_options
+    def links=: (Hash[Symbol, untyped] value) -> Hash[Symbol, untyped]
+    def emoji_shortcodes: () -> bool
+    def emoji_shortcodes=: (bool) -> bool
+    def syntax_highlight: () -> bool
+    def syntax_highlight=: (bool) -> bool
+    def hard_wrap: () -> bool
+    def hard_wrap=: (bool) -> bool
+    def toc: () -> bool
+    def toc=: (bool | Hash[Symbol, untyped]) -> untyped
+    def statistics: () -> bool
+    def statistics=: (bool) -> bool
+    def extract: () -> Hash[Symbol, bool]?
+    def extract=: (Hash[Symbol, bool]?) -> Hash[Symbol, bool]?
+    def math: () -> bool
+    def math=: (bool) -> bool
+    def definition_list: () -> bool
+    def definition_list=: (bool) -> bool
+    def superscript: () -> bool
+    def superscript=: (bool) -> bool
+    def subscript: () -> bool
+    def subscript=: (bool) -> bool
+    def wikilinks: () -> bool
+    def wikilinks=: (bool) -> bool
+    def frontmatter: () -> bool
+    def frontmatter=: (bool) -> bool
+  end
+
+  # Rendered table of contents returned by {Inkmark#toc}. Immutable
+  # value object with value-equality over +markdown+ and +html+.
+  class Toc
+    attr_reader markdown: String
+    attr_reader html: String
+
+    def initialize: (markdown: String, html: String) -> void
+    def to_markdown: () -> String
+    def to_html: () -> String
+    def to_s: () -> String
+    def ==: (untyped other) -> bool
+    alias eql? ==
+    def hash: () -> Integer
+  end
+
+  # Events yielded to handlers registered via {Inkmark#on}.
+  class Event
+    attr_reader kind: Symbol
+    attr_reader text: String
+    attr_reader source: String?
+    attr_reader lang: String?
+    attr_reader byte_range: Range[Integer]?
+    attr_reader depth: Integer
+    attr_reader parent_kind: Symbol?
+    attr_reader ancestor_kinds: Array[Symbol]
+
+    attr_accessor dest: String?
+    attr_accessor title: String?
+    attr_accessor level: Integer?
+    attr_accessor id: String?
+    attr_accessor html: String?
+    attr_accessor markdown: String?
+
+    def initialize: (Hash[Symbol, untyped] data) -> void
+    def children: () -> Array[Event]
+    def children_of: (Symbol kind) -> Array[Event]
+    def delete: () -> void
+    def deleted?: () -> bool
+  end
+
+  type markdown_input = String | _ToS | nil
+  type options_input = Inkmark::Options | Hash[Symbol, untyped] | nil
+
+  # A chunk record returned by {chunks_by_heading}. Keys:
+  # heading (String?), level (Integer), id (String?),
+  # breadcrumb (Array[String]), content (String), and
+  # character_count / word_count (Integer) when statistics: true.
+  type chunk = Hash[Symbol, untyped]
+
+  # A window record returned by {chunks_by_size}. Keys:
+  # index (Integer), content (String), plus character_count /
+  # word_count (Integer) when statistics: true.
+  type window = Hash[Symbol, untyped]
+
+  # Truncation params accepted by {truncate_markdown} and by the
+  # {chunks_by_heading} +truncate:+ kwarg. At least one of
+  # +:chars+ / +:words+ must be set.
+  type truncate_params = {
+    chars: Integer?,
+    words: Integer?,
+    at: (:block | :word)?,
+    marker: String?
+  }
+
+  # Handler registry used by {#on} / {#walk} / {#to_html}.
+  type handlers = Hash[Symbol, Array[^(Inkmark::Event) -> void]]
+
+  # ── Class-method shortcuts ────────────────────────────────────────────
+  def self.to_html: (markdown_input source, ?options: options_input) -> String
+  def self.to_markdown: (markdown_input source, ?options: options_input) -> String
+  def self.to_plain_text: (markdown_input source, ?options: options_input) -> String
+  def self.chunks_by_heading: (markdown_input source, ?options: options_input, ?truncate: truncate_params?) -> Array[chunk]
+  def self.chunks_by_size: (markdown_input source, ?chars: Integer?, ?words: Integer?, ?overlap: Integer, ?at: (:block | :word), ?options: options_input) -> Array[window]
+  def self.truncate_markdown: (markdown_input source, ?chars: Integer?, ?words: Integer?, ?at: (:block | :word), ?marker: String?, ?options: options_input) -> String
+  def self.highlight_css: (?theme: String?) -> String
+  def self.highlight_themes: () -> Array[String]
+  def self.default_options: () -> Inkmark::Options
+  def self.default_options=: (options_input value) -> Inkmark::Options
+
+  # ── Native bindings (private in spirit; registered on the class) ──────
+  def self._native_to_html: (String source, Hash[Symbol, untyped]? opts_hash) -> String
+  def self._native_to_markdown: (String source, Hash[Symbol, untyped]? opts_hash) -> String
+  def self._native_to_plain_text: (String source, Hash[Symbol, untyped]? opts_hash) -> String
+  def self._native_chunks_by_heading: (String source, Hash[Symbol, untyped] opts_hash) -> Array[chunk]
+  def self._native_chunks_by_size: (String source, Hash[Symbol, untyped] opts_hash) -> Array[window]
+  def self._native_truncate_markdown: (String source, Hash[Symbol, untyped] params_hash, Hash[Symbol, untyped] opts_hash) -> String
+  def self._native_render_full: (String source, Hash[Symbol, untyped] opts_hash) -> Hash[Symbol, untyped]
+  def self._native_walk: (String source, Hash[Symbol, untyped] opts_hash, handlers handlers) -> void
+  def self._native_render_with_handlers: (String source, Hash[Symbol, untyped] opts_hash, handlers handlers) -> String
+  def self._syntax_css: (String? theme) -> String
+  def self._syntax_themes: () -> Array[String]
+
+  # ── Instance API ──────────────────────────────────────────────────────
+  attr_reader source: String
+  attr_reader options: Inkmark::Options
+
+  def initialize: (?markdown_input source, ?options: options_input) -> void
+  def source=: (markdown_input value) -> String
+  def options=: (options_input value) -> Inkmark::Options
+  def to_s: () -> String
+
+  def on: (Symbol kind) { (Inkmark::Event) -> void } -> self
+  def walk: () -> self
+
+  def to_html: () -> String
+  def to_markdown: () -> String
+  def to_plain_text: () -> String
+  def chunks_by_heading: (?truncate: truncate_params?) -> Array[chunk]
+  def chunks_by_size: (?chars: Integer?, ?words: Integer?, ?overlap: Integer, ?at: (:block | :word)) -> Array[window]
+  def truncate_markdown: (?chars: Integer?, ?words: Integer?, ?at: (:block | :word), ?marker: String?) -> String
+
+  def toc: () -> Inkmark::Toc?
+  def statistics: () -> Hash[Symbol, untyped]?
+  def extracts: () -> Hash[Symbol, Array[Hash[Symbol, untyped]]]?
+  def frontmatter: () -> Hash[String, untyped]?
+end

@@ -1,0 +1,11 @@
+--readme README.md
+--markup markdown
+--title "Inkmark"
+--output-dir doc
+--no-private
+--embed-mixins
+lib/**/*.rb
+-
+CHANGELOG.md
+NOTICE
+LICENSE.txt

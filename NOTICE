@@ -1,0 +1,16 @@
+Inkmark
+
+Copyright (c) 2026 Yaroslav Markin. Released under the MIT License
+(see LICENSE.txt).
+
+This product includes the following third-party content:
+
+spec/fixtures/commonmark-spec.json
+  Source:    https://spec.commonmark.org/0.31.2/spec.json
+  Project:   CommonMark
+  Authors:   John MacFarlane and contributors
+  License:   CC-BY-SA 4.0
+  Retrieved: 2026-04-14
+
+(Additional entries for benchmark assets are listed in benchmarks/NOTICE,
+which is created in later tasks.)

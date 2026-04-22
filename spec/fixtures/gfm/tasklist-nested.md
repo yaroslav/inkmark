@@ -1,0 +1,4 @@
+- [ ] Parent task
+  - [x] Done subtask
+  - [ ] Pending subtask
+- [x] Sibling done
