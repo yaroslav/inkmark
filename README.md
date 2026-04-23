@@ -50,6 +50,8 @@ gem "inkmark"
 
 Ruby 3.3+ is supported.
 
+The gem comes precompiled, a compiler toolchain is _not_ required for installation.
+
 ## Quick start
 
 ```ruby
