@@ -18,6 +18,11 @@ A very fast, feature-packed, AI-first Markdown gem for Ruby.
 - **Security conscious**. Raw HTML denied by default. Hostname and URL-scheme allowlists for both links and images. GFM tagfilter for dangerous tags. A Rust-backed gem.
 - **Easy extension API**. Hook any element with a Ruby block—no subclassing, no intermediate AST, no HTML post-processing. Rewrite URLs, swap code blocks for your own renderer, drop subtrees, or just walk the document for analysis. Handlers fire inside the single-pass parser, so extension costs essentially nothing beyond the render itself—and far less than regexing over output HTML.
 
+**See the introductory post for background and motivation**:
+
+**[Inkmark: a very fast, feature-packed, AI-first Markdown gem for Ruby
+](https://yaroslav.io/posts/inkmark-fast-ai-first-markdown)**
+
 ## Contents
 
 - [Installation](#installation)
