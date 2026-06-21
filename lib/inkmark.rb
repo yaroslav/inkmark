@@ -222,7 +222,13 @@ class Inkmark
       params = normalize_truncate_params(
         chars: chars, words: words, at: at, marker: marker
       )
-      _native_truncate_markdown(source, params, resolve_frozen_options(options))
+      # truncate's native binding requires an options Hash; unlike the
+      # to_html/to_plain_text bindings it has no nil fast path, so fall
+      # back to the default options hash when the resolver returns nil.
+      _native_truncate_markdown(
+        source, params,
+        resolve_frozen_options(options) || default_options.to_native_hash_frozen
+      )
     end
 
     # Render +source+ through the filter pipeline and serialize to plain
