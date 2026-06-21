@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 
 use magnus::{Error, Ruby};
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, Tag, TagEnd};
+use pulldown_cmark_escape::escape_html;
 use syntect::highlighting::ThemeSet;
 use syntect::html::{css_for_theme_with_class_style, ClassStyle, ClassedHTMLGenerator};
 use syntect::parsing::SyntaxSet;
@@ -87,7 +88,15 @@ fn highlight_code(code: &str, lang: &str, ss: &SyntaxSet) -> String {
 
     // Wrap each line in <span class="line"> so CSS can add line numbers
     // via counter()/::before, highlight specific lines on hover, etc.
-    let mut buf = format!("<pre><code class=\"language-{lang}\">");
+    //
+    // `lang` is the fenced code block's info string—attacker-controlled
+    // markdown. HTML-escape it before it enters the class attribute so a
+    // crafted language tag like `x"><img onerror=...>` can't break out of
+    // the attribute and inject markup (this Html event bypasses
+    // suppress_raw_html, so escaping here is the only defense).
+    let mut buf = String::from("<pre><code class=\"language-");
+    let _ = escape_html(&mut buf, lang);
+    buf.push_str("\">");
     for line in highlighted.split('\n') {
         if !line.is_empty() {
             buf.push_str("<span class=\"line\">");
@@ -147,6 +156,22 @@ mod tests {
         assert!(html.contains("<span"), "should contain span tags: {html}");
         assert!(html.contains("language-rust"));
         assert!(html.contains("<pre><code"));
+    }
+
+    #[test]
+    fn escapes_malicious_language_tag_in_class_attribute() {
+        // The info string is attacker-controlled markdown. A crafted
+        // language tag must not break out of the class attribute.
+        let payload = "x\"><img src=a onerror=alert(1)>";
+        let html = highlight_code("let v = 1;\n", payload, syntax_set());
+        assert!(
+            !html.contains("\"><img src=a onerror="),
+            "language tag must be escaped, got: {html}"
+        );
+        assert!(
+            html.contains("language-x&quot;&gt;&lt;img"),
+            "expected escaped class attribute, got: {html}"
+        );
     }
 
     #[test]
