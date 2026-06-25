@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.1.4] - 2026-06-25
 
 - Fix `frontmatter: true` leaking the frontmatter block into `to_markdown`, `chunks_by_heading`, and `chunks_by_size` output. Bug report by @freesteph [#3]
 
