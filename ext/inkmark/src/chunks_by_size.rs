@@ -18,10 +18,10 @@
 //! adjacent chunks share context.
 
 use magnus::{Error, RArray, RHash, Ruby};
-use pulldown_cmark::{Event, Parser};
+use pulldown_cmark::Event;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::document::apply_filters;
+use crate::document::{apply_filters, content_events};
 use crate::options::build_options;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,7 +45,7 @@ pub fn native_chunks_by_size(
     let params = parse_params(ruby, &opts_hash)?;
     let (cm_opts, flags) = build_options(ruby, opts_hash)?;
 
-    let events: Vec<Event> = Parser::new_ext(&source, cm_opts).collect();
+    let events: Vec<Event> = content_events(&source, cm_opts).collect();
     let events = apply_filters(events, &flags);
 
     let windows = match params.at {

@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Fix `frontmatter: true` leaking the frontmatter block into `to_markdown`, `chunks_by_heading`, and `chunks_by_size` output. Bug report by @freesteph [#3]
+
 ## [0.1.3] - 2026-06-21
 
 - Fix possible XSS via unescaped language tag in syntax-highlighted code blocks.

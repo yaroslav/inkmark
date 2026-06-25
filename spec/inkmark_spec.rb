@@ -229,6 +229,29 @@ RSpec.describe Inkmark do
         expect(md.frontmatter["count"]).to eq(42)
         expect(md.frontmatter["draft"]).to be true
       end
+
+      it "strips frontmatter from rendered Markdown" do
+        md = described_class.new(source, options: {frontmatter: true})
+        expect(md.to_markdown).not_to include("title:")
+        expect(md.to_markdown).to include("# Content")
+      end
+
+      it "strips frontmatter from plain text" do
+        md = described_class.new(source, options: {frontmatter: true})
+        expect(md.to_plain_text).not_to include("title:")
+      end
+
+      it "strips frontmatter from chunks_by_heading" do
+        sections = described_class.new(source, options: {frontmatter: true}).chunks_by_heading
+        expect(sections.map { |s| s[:heading] }).to eq(["Content"])
+        expect(sections.first[:level]).to eq(1)
+        expect(sections).to all(satisfy { |s| !s[:content].include?("title:") })
+      end
+
+      it "strips frontmatter from chunks_by_size" do
+        windows = described_class.new(source, options: {frontmatter: true}).chunks_by_size(chars: 1000)
+        expect(windows).to all(satisfy { |w| !w[:content].include?("title:") })
+      end
     end
 
     context "with frontmatter: false (default)" do

@@ -19,7 +19,7 @@ use magnus::{Error, RArray, RHash, Ruby};
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::document::apply_filters;
+use crate::document::{apply_filters, content_events};
 use crate::heading::{self, SlugDeduplicator};
 use crate::options::build_options;
 use crate::toc;
@@ -43,7 +43,8 @@ pub fn native_chunks_by_heading(
     let (cm_opts, flags) = build_options(ruby, opts_hash)?;
 
     // Parse + run the full filter pipeline, same as `to_markdown`.
-    let events: Vec<Event> = Parser::new_ext(&source, cm_opts).collect();
+    // `content_events` drops frontmatter so it never becomes a section.
+    let events: Vec<Event> = content_events(&source, cm_opts).collect();
     let events = apply_filters(events, &flags);
 
     let boundaries = find_heading_boundaries(&events);

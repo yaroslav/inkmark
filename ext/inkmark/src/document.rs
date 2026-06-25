@@ -1,5 +1,5 @@
 use magnus::{Error, RHash, Ruby};
-use pulldown_cmark::{html, Event, Options, Parser};
+use pulldown_cmark::{html, Event, Options, Parser, Tag, TagEnd};
 
 use crate::autolink;
 use crate::emoji;
@@ -115,6 +115,44 @@ fn hard_wrap(event: Event) -> Event {
     }
 }
 
+/// Parse `source` into the content event stream that renderers and chunkers
+/// consume.
+///
+/// YAML frontmatter is removed at this boundary: it is document *metadata*
+/// (surfaced via {Inkmark#frontmatter}), never content. pulldown-cmark's HTML
+/// renderer ignores metadata blocks and our plain-text writer discards them,
+/// but the Markdown serializer (`pulldown-cmark-to-cmark`) faithfully
+/// re-emits them as `---\n...\n---`. Rather than re-stripping after the fact
+/// in every Markdown/chunk path, we never hand those consumers the events in
+/// the first place—so `to_markdown`, `chunks_by_heading`, and
+/// `chunks_by_size` are frontmatter-free by construction, with no separate
+/// pass and no special-casing of the streaming fast path.
+///
+/// Frontmatter extraction walks the *raw* parser (see `stats::collect`), so
+/// dropping the events here does not affect the `frontmatter` accessor.
+pub fn content_events(source: &str, cm_opts: Options) -> impl Iterator<Item = Event<'_>> {
+    drop_metadata(Parser::new_ext(source, cm_opts))
+}
+
+/// Iterator adapter that filters out `Start(MetadataBlock) … End(MetadataBlock)`
+/// runs, including the raw YAML `Text` between the markers. Stateful but
+/// composes with both the streaming fast path and the buffered `.collect()`
+/// path, so a single definition serves every content consumer.
+fn drop_metadata<'a>(events: impl Iterator<Item = Event<'a>>) -> impl Iterator<Item = Event<'a>> {
+    let mut in_metadata = false;
+    events.filter(move |event| match event {
+        Event::Start(Tag::MetadataBlock(_)) => {
+            in_metadata = true;
+            false
+        }
+        Event::End(TagEnd::MetadataBlock(_)) => {
+            in_metadata = false;
+            false
+        }
+        _ => !in_metadata,
+    })
+}
+
 /// Full render: parse once, collect stats + TOC from original events,
 /// apply filters, render HTML. Returns a Ruby Hash:
 ///
@@ -219,14 +257,18 @@ fn render(source: &str, cm_opts: pulldown_cmark::Options, flags: Flags) -> Strin
 
 fn render_to_markdown(source: &str, cm_opts: pulldown_cmark::Options, flags: Flags) -> String {
     let mut buf = String::with_capacity(source.len());
-    let parser = Parser::new_ext(source, cm_opts);
 
+    // `content_events` strips frontmatter, so the cmark serializer never sees
+    // a metadata block to re-emit—on either the streaming or buffered path.
     if !needs_buffer(&flags) {
-        cmark_write(parser.map(stream_filter(&flags)), &mut buf);
+        cmark_write(
+            content_events(source, cm_opts).map(stream_filter(&flags)),
+            &mut buf,
+        );
         return buf;
     }
 
-    let events = apply_filters(parser.collect(), &flags);
+    let events = apply_filters(content_events(source, cm_opts).collect(), &flags);
     cmark_write(events.into_iter(), &mut buf);
     buf
 }

@@ -7,10 +7,10 @@
 //! input, context-window budgeting, and chunk normalization.
 
 use magnus::{Error, RHash, Ruby};
-use pulldown_cmark::{Event, Parser};
+use pulldown_cmark::Event;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::document::apply_filters;
+use crate::document::{apply_filters, content_events};
 use crate::options::{build_options, Flags};
 
 /// What kind of boundary to cut at.
@@ -44,7 +44,7 @@ pub fn truncate_source(
     flags: &Flags,
     params: &TruncateParams,
 ) -> String {
-    let events: Vec<Event> = Parser::new_ext(source, cm_opts).collect();
+    let events: Vec<Event> = content_events(source, cm_opts).collect();
     let events = apply_filters(events, flags);
     truncate_events(&events, params)
 }
