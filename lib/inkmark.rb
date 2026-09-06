@@ -64,12 +64,11 @@ class Inkmark
     # This is a class-method fast path that skips Inkmark instance and
     # Options copy allocation for the common one-shot render pattern.
     # When the caller passes +options: nil+ (the default), we reuse the
-    # cached frozen hash that {Inkmark::Options#to_native_hash_frozen}
-    # returns; the cache lives on the Options instance itself and is
-    # invalidated by the Options mutation methods, so
-    # +Inkmark.default_options.tables = false+ followed by
-    # +Inkmark.to_html(src)+ picks up the new value without stale-cache
-    # bugs.
+    # frozen hash memoized on {default_options} by
+    # {Inkmark::Options#to_native_hash_frozen}. {configure} and
+    # {default_options=} install a whole new frozen instance rather than
+    # mutating the shared one, so the next render sees the new values
+    # without any stale-cache bugs.
     #
     # **Raw HTML safety.** +raw_html: false+ (the default) escapes
     # every raw HTML tag in the source—safe for untrusted input.
@@ -351,33 +350,65 @@ class Inkmark
     end
 
     # Return an array of available syntax-highlighting theme names.
-    # Memoized—the theme list is fixed at compile time.
+    # Memoized—the theme list is fixed at compile time. The memo is
+    # warmed while this file loads (see the bottom of the file), so
+    # non-main Ractors only ever read it.
     #
-    # @return [Array<String>]
+    # @return [Array<String>] frozen, with frozen elements
     def highlight_themes
-      @highlight_themes ||= _syntax_themes.freeze
+      @highlight_themes ||= _syntax_themes.each(&:freeze).freeze
     end
 
-    # The class-level default options used when no per-instance options are given.
+    # The process-wide default options, used when a render is given no
+    # options of its own. The instance is frozen all the way down and
+    # shared by every thread and Ractor in the process; change it with
+    # {configure} or {default_options=}, never in place.
     #
-    # @return [Inkmark::Options]
+    # @return [Inkmark::Options] frozen
     def default_options
-      @default_options ||= Inkmark::Options.new
+      @default_options || DEFAULT_OPTIONS
     end
 
-    # Replace the class-level default options.
+    # Replace the process-wide default options. The value is copied and
+    # frozen all the way down (+Ractor.make_shareable+), so the caller
+    # keeps its own object mutable and worker Ractors can read the
+    # result. Call this on the main Ractor before spawning workers.
     #
-    # @param value [Hash, Inkmark::Options] new defaults; a Hash is converted to
-    #   Inkmark::Options, a Inkmark::Options is duped
-    # @return [Inkmark::Options] the stored options object
+    # @param value [Hash, Inkmark::Options] new defaults; a Hash is
+    #   converted to Inkmark::Options
+    # @return [Inkmark::Options] the stored, frozen options
     # @raise [TypeError] if +value+ is not a Hash or Inkmark::Options
+    # @example
+    #   Inkmark.default_options = { preset: :recommended, math: true }
     def default_options=(value)
-      @default_options =
+      options =
         case value
-        when Inkmark::Options then value.dup
+        when Inkmark::Options then value
         when Hash then Inkmark::Options.new(value)
         else raise TypeError, "default_options must be a Hash or Inkmark::Options, got #{value.class}"
         end
+      # Copy-on-write of a shareable value: main-Ractor configuration.
+      @default_options = Ractor.make_shareable(options, copy: true) # audition:disable class-level-state
+    end
+
+    # Adjust the process-wide default options. Yields a mutable copy of
+    # the current {default_options}; the result is stored frozen through
+    # {default_options=}. Successive calls build on each other. Call this
+    # on the main Ractor before spawning workers.
+    #
+    # @yieldparam options [Inkmark::Options] a mutable copy of the
+    #   current defaults
+    # @return [Inkmark::Options] the stored, frozen options
+    # @example In an application initializer
+    #   Inkmark.configure do |options|
+    #     options.math = true
+    #     options.links = { nofollow: true }
+    #   end
+    def configure
+      options = default_options.dup
+      yield options
+      self.default_options = options
+      default_options
     end
 
     private
@@ -413,12 +444,18 @@ class Inkmark
     end
   end
 
+  # Built-in defaults, served by {default_options} until {configure} or
+  # {default_options=} installs a replacement. Frozen all the way down
+  # (which also memoizes its FFI hash, see {Inkmark::Options#freeze}).
+  DEFAULT_OPTIONS = Ractor.make_shareable(Inkmark::Options.new)
+  private_constant :DEFAULT_OPTIONS
+
   # Create a new renderer for +source+.
   #
   # @param source [String, nil] markdown source; +nil+ is treated as an
   #   empty string
   # @param options [Hash, Inkmark::Options, nil] rendering options; falls back
-  #   to a dup of {Inkmark.default_options} when nil
+  #   to a mutable copy of {Inkmark.default_options} when nil
   # @raise [TypeError] if +options+ is not a Hash, Inkmark::Options, or nil
   def initialize(source = nil, options: nil)
     self.source = source
@@ -459,8 +496,8 @@ class Inkmark
 
   # Set rendering options.
   #
-  # @param value [Hash, Inkmark::Options, nil] new options; nil resets to a dup
-  #   of {Inkmark.default_options}
+  # @param value [Hash, Inkmark::Options, nil] new options; nil resets to a
+  #   mutable copy of {Inkmark.default_options}
   # @return [Inkmark::Options] the stored options object
   # @raise [TypeError] if +value+ is not a Hash, Inkmark::Options, or nil
   def options=(value)
@@ -715,3 +752,8 @@ class Inkmark
     extract.is_a?(Hash) && extract.any? { |_, v| v }
   end
 end
+
+# Warm the class-level memo on the main Ractor while loading, so worker
+# Ractors only ever read it (a first write from a worker would raise
+# Ractor::IsolationError).
+Inkmark.highlight_themes

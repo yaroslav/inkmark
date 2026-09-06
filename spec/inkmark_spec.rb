@@ -130,11 +130,28 @@ RSpec.describe Inkmark do
   end
 
   describe ".default_options" do
-    before { described_class.default_options = Inkmark::Options.new }
-    after { described_class.default_options = Inkmark::Options.new }
+    # Restore the pristine "nothing configured" state around every example
+    # so the nil fast path stays exercised by the rest of the suite.
+    before { described_class.instance_variable_set(:@default_options, nil) }
+    after { described_class.instance_variable_set(:@default_options, nil) }
 
     it "returns a Inkmark::Options instance" do
       expect(described_class.default_options).to be_a(Inkmark::Options)
+    end
+
+    it "returns the built-in defaults when nothing was configured" do
+      expect(described_class.default_options.tables).to be true
+      expect(described_class.default_options).to eq(Inkmark::Options.new)
+    end
+
+    it "is frozen all the way down" do
+      expect(described_class.default_options).to be_frozen
+      expect(Ractor.shareable?(described_class.default_options)).to be true
+    end
+
+    it "refuses in-place mutation and points at configure" do
+      expect { described_class.default_options.math = true }
+        .to raise_error(FrozenError, /Inkmark\.configure/)
     end
 
     it "seeds new instances when no options are passed" do
@@ -143,11 +160,68 @@ RSpec.describe Inkmark do
       expect(g.options.tables).to be false
     end
 
-    it "does not let defaults bleed from mutating one instance" do
-      described_class.default_options = Inkmark::Options.new
+    it "seeds mutable per-instance copies" do
       g = described_class.new("hi")
+      expect(g.options).not_to be_frozen
       g.options.tables = false
       expect(described_class.default_options.tables).to be true
+    end
+
+    it "is picked up by the class-method renderers" do
+      described_class.default_options = {strikethrough: false}
+      expect(described_class.to_html("~~x~~")).to eq("<p>~~x~~</p>\n")
+      expect(described_class.to_plain_text("~~x~~")).to eq("~~x~~\n")
+      # truncate_markdown has no nil fast path and falls back to the
+      # frozen defaults' memoized hash.
+      expect(described_class.truncate_markdown("one two three", words: 2)).to be_a(String)
+    end
+
+    describe ".default_options=" do
+      it "stores a frozen copy and leaves the caller's object mutable" do
+        opts = Inkmark::Options.new(tables: false)
+        described_class.default_options = opts
+        expect(described_class.default_options).to be_frozen
+        expect(opts).not_to be_frozen
+
+        opts.tables = true
+        expect(described_class.default_options.tables).to be false
+      end
+
+      it "does not freeze arrays inside a given hash" do
+        hosts = ["cdn.example.com"]
+        described_class.default_options = {images: {allowed_hosts: hosts}}
+        expect(hosts).not_to be_frozen
+        expect(described_class.default_options.images[:allowed_hosts]).to eq(hosts)
+      end
+
+      it "raises TypeError for anything but a Hash or Options" do
+        expect { described_class.default_options = :gfm }.to raise_error(TypeError)
+      end
+    end
+
+    describe ".configure" do
+      it "yields a mutable copy and stores the frozen result" do
+        yielded = nil
+        described_class.configure do |options|
+          yielded = options
+          options.math = true
+        end
+        expect(yielded).not_to be_frozen
+        expect(described_class.default_options.math).to be true
+        expect(described_class.default_options).to be_frozen
+      end
+
+      it "accumulates across calls" do
+        described_class.configure { |o| o.math = true }
+        described_class.configure { |o| o.tables = false }
+        expect(described_class.default_options.math).to be true
+        expect(described_class.default_options.tables).to be false
+      end
+
+      it "returns the stored options" do
+        result = described_class.configure { |o| o.wikilinks = true }
+        expect(result).to equal(described_class.default_options)
+      end
     end
   end
 

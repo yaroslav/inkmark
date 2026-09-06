@@ -179,6 +179,7 @@ class Inkmark
   def self.highlight_themes: () -> Array[String]
   def self.default_options: () -> Inkmark::Options
   def self.default_options=: (options_input value) -> Inkmark::Options
+  def self.configure: () { (Inkmark::Options options) -> void } -> Inkmark::Options
 
   # ── Native bindings (private in spirit; registered on the class) ──────
   def self._native_to_html: (String source, Hash[Symbol, untyped]? opts_hash) -> String

@@ -22,6 +22,35 @@ RSpec.describe "Inkmark inside a Ractor" do
     ractor.respond_to?(:value) ? ractor.value : ractor.take
   end
 
+  describe "Inkmark.default_options" do
+    after { Inkmark.instance_variable_set(:@default_options, nil) }
+
+    it "is readable from a worker" do
+      result = in_ractor { [Inkmark.default_options.frozen?, Inkmark.default_options.tables] }
+      expect(result).to eq([true, true])
+    end
+
+    it "reflects configuration done on the main Ractor" do
+      Inkmark.configure { |o| o.math = true }
+      expect(in_ractor { Inkmark.default_options.math }).to be true
+    end
+
+    it "seeds mutable per-instance options inside a worker" do
+      result = in_ractor do
+        md = Inkmark.new("x")
+        md.options.tables = false
+        [md.options.tables, md.options.frozen?]
+      end
+      expect(result).to eq([false, false])
+    end
+  end
+
+  describe "Inkmark.highlight_themes" do
+    it "is readable from a worker" do
+      expect(in_ractor { Inkmark.highlight_themes }).to eq(Inkmark.highlight_themes)
+    end
+  end
+
   describe "Inkmark::Options" do
     it "reads and writes options through the generated accessors" do
       result = in_ractor do

@@ -177,9 +177,15 @@ g.options.math = true
 g.options.tables = false
 g.to_html
 
-# Process-level defaults, to set in your application initializer
-Inkmark.default_options.math = true
-Inkmark.new(md).to_html  # picks up the default
+# Process-wide defaults, set once in your application initializer
+Inkmark.configure do |options|
+  options.math = true
+  options.links = { nofollow: true }
+end
+Inkmark.new(md).to_html  # picks up the defaults
+
+# Or replace them wholesale
+Inkmark.default_options = { preset: :recommended, math: true }
 ```
 
 Unknown option keys raise `ArgumentError` immediately, including via the

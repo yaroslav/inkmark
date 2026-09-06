@@ -393,7 +393,16 @@ class Inkmark
     #   hashes; the input value as-is otherwise)
     # @raise [ArgumentError] if +key+ is unknown, or the value (or any
     #   nested sub-value) has the wrong type
+    # @raise [FrozenError] if this instance is frozen (as
+    #   {Inkmark.default_options} always is)
     def []=(key, value)
+      if frozen?
+        raise FrozenError.new(
+          "can't modify frozen #{self.class}: use Inkmark.configure to change " \
+          "the process-wide defaults, or dup for a mutable copy",
+          receiver: self
+        )
+      end
       validate_key!(key)
       # Deep-merge partial nested-hash overrides (+:headings+,
       # +:images+, +:links+) so callers pass only the sub-keys they
@@ -468,6 +477,18 @@ class Inkmark
       other.class == self.class && to_h == other.to_h
     end
     alias_method :eql?, :==
+
+    # Freeze this instance. The memoized FFI hash is computed first, while
+    # the instance is still mutable, so {#to_native_hash_frozen} never has
+    # to write to a frozen object. +Ractor.make_shareable+ calls +freeze+
+    # on every object it visits, which is what makes a shared
+    # {Inkmark.default_options} renderable from any Ractor.
+    #
+    # @return [self]
+    def freeze
+      to_native_hash_frozen
+      super
+    end
 
     # Duplicate this instance, deep-copying the internal values hash so the
     # clone is fully independent from the original.

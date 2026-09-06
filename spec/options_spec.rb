@@ -512,6 +512,25 @@ RSpec.describe Inkmark::Options do
     end
   end
 
+  describe "#freeze" do
+    it "keeps the native hash available on a frozen instance" do
+      opts = described_class.new(math: true).freeze
+      expect(opts.to_native_hash_frozen).to include(math: true)
+    end
+
+    it "makes Ractor.make_shareable produce a usable instance" do
+      opts = Ractor.make_shareable(described_class.new(links: {allowed_hosts: ["a.com"]}))
+      expect(Ractor.shareable?(opts)).to be true
+      expect(opts.to_native_hash_frozen[:allowed_link_hosts]).to eq(["a.com"])
+    end
+
+    it "makes #[]= raise a FrozenError that points at Inkmark.configure" do
+      opts = described_class.new.freeze
+      expect { opts[:math] = true }.to raise_error(FrozenError, /Inkmark\.configure/)
+      expect { opts.math = true }.to raise_error(FrozenError, /Inkmark\.configure/)
+    end
+  end
+
   describe "Ractor shareability" do
     %i[
       HEADINGS_SCHEMA IMAGES_SCHEMA LINKS_SCHEMA NESTED_SCHEMAS NESTED_TO_FLAT
