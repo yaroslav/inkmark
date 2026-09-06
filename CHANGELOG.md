@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.2.0] - 2026-09-06
 
 - Ractor-safe: the native extension declares `rb_ext_ractor_safe`, and every public API works from non-main Ractors.
 - `Inkmark.default_options` is now frozen; configure process-wide defaults with `Inkmark.configure { |o| ... }` or `Inkmark.default_options=`.
