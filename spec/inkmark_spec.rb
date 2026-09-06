@@ -328,6 +328,15 @@ RSpec.describe Inkmark do
       end
     end
 
+    it "loads YAML on first use, not with the gem" do
+      script = 'require "inkmark"; before = defined?(::YAML).inspect; ' \
+        'Inkmark.new("---\ntitle: x\n---\n# h", options: {frontmatter: true}).frontmatter; ' \
+        'puts [before, defined?(::YAML).inspect].join(" ")'
+      lib = File.expand_path("../lib", __dir__)
+      output = IO.popen([RbConfig.ruby, "-I", lib, "-e", script], &:read)
+      expect(output.strip).to eq('nil "constant"')
+    end
+
     context "with frontmatter: false (default)" do
       it "returns nil" do
         expect(described_class.new(source).frontmatter).to be_nil

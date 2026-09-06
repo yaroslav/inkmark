@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "yaml"
-
 # Inkmark is a very fast, feature-rich, AI-first CommonMark/GFM
 # markdown renderer backed by the Rust pulldown-cmark parser.
 #
@@ -718,6 +716,9 @@ class Inkmark
   # The raw YAML text is extracted by Rust during the event walk;
   # parsing uses Ruby's stdlib +YAML.safe_load+ so all standard YAML
   # types (strings, numbers, arrays, nested hashes) are supported.
+  # Psych is loaded here, on first use, rather than with the gem: front
+  # matter is opt-in, and this keeps Psych's load time and its own
+  # constants out of processes that never enable it.
   #
   # @return [Hash, nil] parsed frontmatter or nil
   # @example
@@ -728,7 +729,10 @@ class Inkmark
     return @frontmatter if defined?(@frontmatter)
     return @frontmatter = nil unless @options[:frontmatter]
     to_html unless @frontmatter_raw
-    @frontmatter = @frontmatter_raw ? YAML.safe_load(@frontmatter_raw) : nil
+    return @frontmatter = nil unless @frontmatter_raw
+
+    require "yaml" unless defined?(::YAML) # audition:disable runtime-require
+    @frontmatter = YAML.safe_load(@frontmatter_raw)
   end
 
   private
