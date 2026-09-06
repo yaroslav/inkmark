@@ -511,4 +511,49 @@ RSpec.describe Inkmark::Options do
       expect(b).not_to have_key(:foo)
     end
   end
+
+  describe "#freeze" do
+    it "keeps the native hash available on a frozen instance" do
+      opts = described_class.new(math: true).freeze
+      expect(opts.to_native_hash_frozen).to include(math: true)
+    end
+
+    it "makes Ractor.make_shareable produce a usable instance" do
+      opts = Ractor.make_shareable(described_class.new(links: {allowed_hosts: ["a.com"]}))
+      expect(Ractor.shareable?(opts)).to be true
+      expect(opts.to_native_hash_frozen[:allowed_link_hosts]).to eq(["a.com"])
+    end
+
+    it "makes #[]= raise a FrozenError that points at Inkmark.configure" do
+      opts = described_class.new.freeze
+      expect { opts[:math] = true }.to raise_error(FrozenError, /Inkmark\.configure/)
+      expect { opts.math = true }.to raise_error(FrozenError, /Inkmark\.configure/)
+    end
+  end
+
+  describe "Ractor shareability" do
+    %i[
+      HEADINGS_SCHEMA IMAGES_SCHEMA LINKS_SCHEMA NESTED_SCHEMAS NESTED_TO_FLAT
+      DEFAULTS TYPES EXTRACT_KINDS PRESETS PRESETS_NATIVE_HASH
+    ].each do |name|
+      it "#{name} is deeply frozen" do
+        expect(Ractor.shareable?(described_class.const_get(name))).to be true
+      end
+    end
+
+    it "#to_native_hash_frozen is deeply frozen" do
+      opts = described_class.new(
+        images: {allowed_hosts: ["*.cdn.com"]},
+        extract: {images: true}
+      )
+      expect(Ractor.shareable?(opts.to_native_hash_frozen)).to be true
+    end
+
+    it "#to_native_hash_frozen leaves the caller's arrays mutable" do
+      hosts = ["*.cdn.com"]
+      opts = described_class.new(images: {allowed_hosts: hosts})
+      opts.to_native_hash_frozen
+      expect(hosts).not_to be_frozen
+    end
+  end
 end

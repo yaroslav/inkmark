@@ -29,10 +29,10 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
   spec.extensions = ["ext/inkmark/extconf.rb"]
 
-  spec.add_dependency "rb_sys", "~> 0.9.126"
+  spec.add_dependency "rb_sys", "~> 0.9.130"
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "irb"
-  spec.add_development_dependency "rbs", "~> 3.9"
+  spec.add_development_dependency "rbs", "~> 4.0"
   spec.add_development_dependency "yard", "~> 0.9"
   spec.add_development_dependency "standard", "~> 1.3"
   spec.add_development_dependency "rspec", "~> 3.0"
