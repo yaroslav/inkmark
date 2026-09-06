@@ -478,14 +478,26 @@ class Inkmark
       @frozen_native_hash = nil
     end
 
-    # @!macro [attach] inkmark_options_accessor
-    #   @!attribute [rw] $1
-    #     Reader and writer for the +$1+ option. The writer routes through
-    #     {#[]=} so key validation and (for nested groups) deep-merge apply
-    #     uniformly.
+    # Reader and writer for every option key. The writer routes through
+    # {#[]=} so key validation and (for nested groups) deep-merge apply
+    # uniformly.
+    #
+    # Generated from source strings rather than +define_method+ blocks:
+    # a block-defined method carries its Proc, and Ruby refuses to call
+    # such a method from a non-main Ractor ("defined with an un-shareable
+    # Proc in a different Ractor"). Plain +def+ bodies have no such
+    # baggage. +key+ is always a Symbol from {DEFAULTS}, so interpolating
+    # it is safe.
     DEFAULTS.each_key do |key|
-      define_method(key) { @values[key] }
-      define_method("#{key}=") { |value| self[key] = value }
+      class_eval(<<~RUBY, __FILE__, __LINE__ + 1)
+        def #{key}                # def tables
+          @values[:#{key}]        #   @values[:tables]
+        end                       # end
+
+        def #{key}=(value)        # def tables=(value)
+          self[:#{key}] = value   #   self[:tables] = value
+        end                       # end
+      RUBY
     end
 
     private
