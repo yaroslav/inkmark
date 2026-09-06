@@ -3,6 +3,7 @@
 - Ractor-safe: the native extension declares `rb_ext_ractor_safe`, and every public API works from non-main Ractors.
 - `Inkmark.default_options` is now frozen; configure process-wide defaults with `Inkmark.configure { |o| ... }` or `Inkmark.default_options=`.
 - Load YAML on the first `frontmatter` parse instead of at require time.
+- Updated dependencies.
 
 ## [0.1.4] - 2026-06-25
 

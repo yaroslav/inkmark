@@ -11,11 +11,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 magnus = { version = "0.8.2" }
-rb-sys = { version = "0.9.126", features = ["stable-api-compiled-fallback"] }
+rb-sys = { version = "0.9.130", features = ["stable-api-compiled-fallback"] }
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html", "simd"] }
 pulldown-cmark-escape = "0.11"
 deunicode = "1.6"
-emojis = "0.8"
+emojis = "0.9"
 whatlang = "0.18"
 unicode-segmentation = "1.12"
 syntect = { version = "5.2", default-features = false, features = ["parsing", "html", "default-themes", "default-syntaxes", "regex-fancy"] }
@@ -28,4 +28,4 @@ pulldown-cmark-to-cmark = "22"
 rb-sys-env = "0.2.2"
 
 [dev-dependencies]
-rb-sys-test-helpers = { version = "0.2.2" }
+rb-sys-test-helpers = { version = "0.3.0" }
