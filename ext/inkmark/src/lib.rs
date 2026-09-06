@@ -1,4 +1,6 @@
-#![forbid(unsafe_code)]
+// `deny` rather than `forbid`: the single `unsafe` block in `init` is
+// allowed explicitly; everything else stays unsafe-free.
+#![deny(unsafe_code)]
 
 use magnus::{function, prelude::*, Error, Ruby};
 
@@ -22,11 +24,34 @@ mod truncate;
 mod url_match;
 
 #[magnus::init]
+#[allow(unsafe_code)]
 fn init(ruby: &Ruby) -> Result<(), Error> {
+    // Declare every method defined below Ractor-safe. Ruby marks the methods an
+    // extension defines while `Init_*` runs as unsafe unless this flag is set,
+    // and calling such a method from a non-main Ractor raises
+    // `Ractor::UnsafeError`. The extension keeps no Ruby `VALUE`s in
+    // process-global state: the `OnceLock` caches in `highlight` hold plain
+    // syntect data (`Sync`, enforced by the compiler) and the `sym_id!`
+    // statics in `options` hold interned symbol ids, both safe to share across
+    // Ractors. This must run before `define_class` so the flag covers every
+    // method registered below.
+    //
+    // SAFETY: `rb_ext_ractor_safe` takes no pointers and only flips a flag on
+    // the VM's extension-loading state. Its one precondition is being called
+    // while `Init_*` runs, which is exactly where `#[magnus::init]` invokes
+    // this function.
+    unsafe { rb_sys::rb_ext_ractor_safe(true) };
+
     let inkmark = ruby.define_class("Inkmark", ruby.class_object())?;
     inkmark.define_singleton_method("_native_to_html", function!(document::native_to_html, 2))?;
-    inkmark.define_singleton_method("_native_to_markdown", function!(document::native_to_markdown, 2))?;
-    inkmark.define_singleton_method("_native_to_plain_text", function!(document::native_to_plain_text, 2))?;
+    inkmark.define_singleton_method(
+        "_native_to_markdown",
+        function!(document::native_to_markdown, 2),
+    )?;
+    inkmark.define_singleton_method(
+        "_native_to_plain_text",
+        function!(document::native_to_plain_text, 2),
+    )?;
     inkmark.define_singleton_method(
         "_native_chunks_by_heading",
         function!(chunks_by_heading::native_chunks_by_heading, 2),

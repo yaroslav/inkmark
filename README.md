@@ -38,6 +38,7 @@ A very fast, feature-packed, AI-first Markdown gem for Ruby.
 - [Plain-text extraction](#plain-text-extraction)
 - [Markdown-to-Markdown pipeline](#markdown-to-markdown-pipeline)
 - [Event handlers](#event-handlers)
+- [Ractors](#ractors)
 - [Benchmarks](#benchmarks)
 - [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
@@ -1034,6 +1035,21 @@ Post-render filters (`syntax_highlight`, allowlists, `images: { lazy: true }`,
   `syntax_highlight: true`—setting `html=` on a code block overrides the
   highlighter
 - Handler-set `dest=` values pass through host and scheme allowlists
+
+## Ractors
+
+Inkmark is Ractor-safe: every public API works inside non-main Ractors,
+so documents can be rendered in parallel without leaving the native fast
+path.
+
+```ruby
+workers = sources.each_slice(250).map do |slice|
+  Ractor.new(slice) do |batch|
+    batch.map { |src| Inkmark.to_html(src, options: { preset: :recommended }) }
+  end
+end
+html = workers.flat_map(&:value)  # Ruby 4.0; use #take on 3.3 and 3.4
+```
 
 ## Benchmarks
 
