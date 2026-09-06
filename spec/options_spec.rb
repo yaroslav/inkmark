@@ -511,4 +511,30 @@ RSpec.describe Inkmark::Options do
       expect(b).not_to have_key(:foo)
     end
   end
+
+  describe "Ractor shareability" do
+    %i[
+      HEADINGS_SCHEMA IMAGES_SCHEMA LINKS_SCHEMA NESTED_SCHEMAS NESTED_TO_FLAT
+      DEFAULTS TYPES EXTRACT_KINDS PRESETS PRESETS_NATIVE_HASH
+    ].each do |name|
+      it "#{name} is deeply frozen" do
+        expect(Ractor.shareable?(described_class.const_get(name))).to be true
+      end
+    end
+
+    it "#to_native_hash_frozen is deeply frozen" do
+      opts = described_class.new(
+        images: {allowed_hosts: ["*.cdn.com"]},
+        extract: {images: true}
+      )
+      expect(Ractor.shareable?(opts.to_native_hash_frozen)).to be true
+    end
+
+    it "#to_native_hash_frozen leaves the caller's arrays mutable" do
+      hosts = ["*.cdn.com"]
+      opts = described_class.new(images: {allowed_hosts: hosts})
+      opts.to_native_hash_frozen
+      expect(hosts).not_to be_frozen
+    end
+  end
 end

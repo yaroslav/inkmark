@@ -22,22 +22,28 @@ class Inkmark
     # Per-element-policy schemas. Each entry is +{ default:, types: }+; the
     # validators use +types+ for type checking and +default+ to seed fresh
     # nested hashes. Keep in sync with {NESTED_TO_FLAT}.
+    #
+    # Every constant in this class is frozen all the way down, not just
+    # at the top level: a non-main Ractor may only read constants whose
+    # whole object graph is frozen (+Ractor.shareable?+), so the inner
+    # Hashes and Arrays are frozen explicitly and the larger nested
+    # tables go through +Ractor.make_shareable+.
     HEADINGS_SCHEMA = {
-      attributes: {default: false, types: [TrueClass, FalseClass]},
-      ids: {default: false, types: [TrueClass, FalseClass]}
+      attributes: {default: false, types: [TrueClass, FalseClass].freeze}.freeze,
+      ids: {default: false, types: [TrueClass, FalseClass].freeze}.freeze
     }.freeze
 
     IMAGES_SCHEMA = {
-      lazy: {default: false, types: [TrueClass, FalseClass]},
-      allowed_hosts: {default: nil, types: [NilClass, Array]},
-      allowed_schemes: {default: nil, types: [NilClass, Array]}
+      lazy: {default: false, types: [TrueClass, FalseClass].freeze}.freeze,
+      allowed_hosts: {default: nil, types: [NilClass, Array].freeze}.freeze,
+      allowed_schemes: {default: nil, types: [NilClass, Array].freeze}.freeze
     }.freeze
 
     LINKS_SCHEMA = {
-      autolink: {default: false, types: [TrueClass, FalseClass]},
-      nofollow: {default: false, types: [TrueClass, FalseClass]},
-      allowed_hosts: {default: nil, types: [NilClass, Array]},
-      allowed_schemes: {default: nil, types: [NilClass, Array]}
+      autolink: {default: false, types: [TrueClass, FalseClass].freeze}.freeze,
+      nofollow: {default: false, types: [TrueClass, FalseClass].freeze}.freeze,
+      allowed_hosts: {default: nil, types: [NilClass, Array].freeze}.freeze,
+      allowed_schemes: {default: nil, types: [NilClass, Array].freeze}.freeze
     }.freeze
 
     # Registry of nested hash options => their schemas. Iterated by the
@@ -52,7 +58,7 @@ class Inkmark
     # Map from +(parent, child)+ user-facing keys to the flat key name the
     # Rust side reads. Used by {#to_native_hash} / {#to_native_hash_frozen}
     # to serialize the user-shaped hash into the FFI wire format.
-    NESTED_TO_FLAT = {
+    NESTED_TO_FLAT = Ractor.make_shareable({
       [:headings, :attributes] => :heading_attributes,
       [:headings, :ids] => :heading_ids,
       [:images, :lazy] => :lazy_images,
@@ -62,7 +68,7 @@ class Inkmark
       [:links, :nofollow] => :nofollow_external_links,
       [:links, :allowed_hosts] => :allowed_link_hosts,
       [:links, :allowed_schemes] => :allowed_link_schemes
-    }.freeze
+    })
 
     # Build a frozen defaults hash for a nested schema from its +default+
     # entries.
@@ -200,11 +206,11 @@ class Inkmark
     # the accepted type set (nil-default-but-Array-when-set, polymorphic
     # +toc+, nested-hash element-policy groups).
     TYPES = {
-      extract: [NilClass, Hash],
-      toc: [TrueClass, FalseClass, Hash],
-      headings: [Hash],
-      images: [Hash],
-      links: [Hash]
+      extract: [NilClass, Hash].freeze,
+      toc: [TrueClass, FalseClass, Hash].freeze,
+      headings: [Hash].freeze,
+      images: [Hash].freeze,
+      links: [Hash].freeze
     }.freeze
 
     # Element kinds accepted inside +extract: { ... }+. Mirrors the match
@@ -237,7 +243,7 @@ class Inkmark
     #   The GFM tagfilter stays on. **Dangerous.** Use only for content
     #   the caller fully trusts (internal team-authored docs). The
     #   caller is fully responsible for sanitizing output.
-    PRESETS = {
+    PRESETS = Ractor.make_shareable({
       commonmark: {
         gfm: false,
         gfm_tag_filter: false,
@@ -245,7 +251,7 @@ class Inkmark
         strikethrough: false,
         tasklists: false,
         footnotes: false
-      }.freeze,
+      },
 
       gfm: {
         gfm: true,
@@ -254,7 +260,7 @@ class Inkmark
         strikethrough: true,
         tasklists: true,
         footnotes: true
-      }.freeze,
+      },
 
       recommended: {
         gfm: true,
@@ -272,7 +278,7 @@ class Inkmark
         syntax_highlight: true,
         hard_wrap: true,
         frontmatter: true
-      }.freeze,
+      },
 
       trusted: {
         gfm: true,
@@ -290,8 +296,8 @@ class Inkmark
         syntax_highlight: true,
         hard_wrap: true,
         frontmatter: true
-      }.freeze
-    }.freeze
+      }
+    })
 
     # Preset applied by {#initialize} when the caller doesn't pass
     # +preset:+. +:gfm+ matches {DEFAULTS}, so the default constructor
@@ -429,11 +435,17 @@ class Inkmark
     # FFI calls that don't need to add per-call params. The cache is
     # invalidated in {#[]=} and {#initialize_copy}.
     #
-    # @return [Hash{Symbol => Object}] frozen, shared across calls until
-    #   a mutation invalidates it
+    # The hash is frozen all the way down, as a copy: nested Arrays and
+    # Hashes are duplicated before freezing so caller-supplied values
+    # (an +allowed_hosts+ Array, say) stay mutable in the caller's hands.
+    # A deeply frozen memo is what lets a frozen +Options+ be shared
+    # across Ractors.
+    #
+    # @return [Hash{Symbol => Object}] deeply frozen, shared across calls
+    #   until a mutation invalidates it
     # @api private
     def to_native_hash_frozen
-      @frozen_native_hash ||= build_native_hash.freeze
+      @frozen_native_hash ||= deep_frozen_copy(build_native_hash)
     end
 
     # Return a new Options instance with +other+'s values applied on top.
@@ -516,6 +528,19 @@ class Inkmark
     # of truth for validation rules and error messages.
     def validate_key!(key) = self.class.send(:validate_key!, key)
     def validate_value!(key, value) = self.class.send(:validate_value!, key, value)
+
+    # Return a frozen copy of +value+ with every nested Hash, Array, and
+    # String frozen too. Scalars (booleans, nil, Integers, Symbols) are
+    # returned as is. Only the container shapes {#build_native_hash} can
+    # produce are handled.
+    def deep_frozen_copy(value)
+      case value
+      when Hash then value.transform_values { |v| deep_frozen_copy(v) }.freeze
+      when Array then value.map { |v| deep_frozen_copy(v) }.freeze
+      when String then -value
+      else value
+      end
+    end
 
     # Build the Rust-facing flat hash: nested element-policy hashes expand
     # into their flat keys via {NESTED_TO_FLAT}; the internal +@toc_depth+
@@ -624,10 +649,13 @@ class Inkmark
     # +options: { preset: :name }+ call pattern, which would otherwise
     # build a fresh +Options+ instance (seed defaults, 6–14 +[]=+
     # with validation, +build_native_hash+) on every call. The cached
-    # hashes are frozen and safe to share across threads.
-    PRESETS_NATIVE_HASH = PRESETS.keys.each_with_object({}) do |name, h|
-      h[name] = new(preset: name).to_native_hash_frozen
-    end.freeze
+    # hashes are deeply frozen and safe to share across threads and
+    # Ractors.
+    PRESETS_NATIVE_HASH = Ractor.make_shareable(
+      PRESETS.keys.each_with_object({}) do |name, h|
+        h[name] = new(preset: name).to_native_hash_frozen
+      end
+    )
 
     # Build a Rust-facing flat hash from +overrides+ without allocating
     # an +Options+ instance or walking +build_native_hash+. Starts from
