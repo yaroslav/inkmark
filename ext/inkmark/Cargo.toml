@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-magnus = { version = "0.8.2" }
+magnus = { version = "0.9.0", default-features = false }
 rb-sys = { version = "0.9.130", features = ["stable-api-compiled-fallback"] }
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html", "simd"] }
 pulldown-cmark-escape = "0.11"

@@ -696,11 +696,7 @@ fn apply_mutations(node: &mut Node, event_obj: Value, _ruby: &Ruby) -> Result<()
     Ok(())
 }
 
-pub fn dispatch_handlers(
-    nodes: &mut Vec<Node>,
-    handlers: &RHash,
-    ruby: &Ruby,
-) -> Result<(), Error> {
+pub fn dispatch_handlers(nodes: &mut [Node], handlers: &RHash, ruby: &Ruby) -> Result<(), Error> {
     for node in nodes.iter_mut() {
         dispatch_handlers(&mut node.children, handlers, ruby)?;
 

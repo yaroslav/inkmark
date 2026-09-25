@@ -18,7 +18,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Read version
         id: version
@@ -33,7 +33,7 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -77,7 +77,7 @@ jobs:
           - arm64-darwin
           - x64-mingw-ucrt
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -187,7 +187,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 

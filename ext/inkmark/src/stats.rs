@@ -16,9 +16,9 @@
 //! The collector is the single source of truth for the full-render path.
 //! Two independent Ruby-side knobs consume its output:
 //! - `statistics: true` => scalar counts and language
-//! detection (`to_statistics_hash`)
+//!   detection (`to_statistics_hash`)
 //! - `extract: {...}` => filtered arrays of structured
-//! records (`to_extracts_hash`)
+//!   records (`to_extracts_hash`)
 
 use std::ops::Range;
 
@@ -293,10 +293,8 @@ pub fn collect(events: &[(Event<'_>, Range<usize>)]) -> Stats {
                     }
                 }
             }
-            Event::SoftBreak | Event::HardBreak => {
-                if !in_code_block {
-                    text_buf.push(' ');
-                }
+            Event::SoftBreak | Event::HardBreak if !in_code_block => {
+                text_buf.push(' ');
             }
             _ => {}
         }
