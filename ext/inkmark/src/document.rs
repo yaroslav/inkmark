@@ -283,7 +283,7 @@ fn render_to_plain_text(source: &str, cm_opts: pulldown_cmark::Options, flags: F
     }
 
     let events = apply_filters(parser.collect(), &flags);
-    plain_text::write_plain_text(events.into_iter(), &mut buf);
+    plain_text::write_plain_text(events, &mut buf);
     buf
 }
 

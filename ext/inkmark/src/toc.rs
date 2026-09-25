@@ -22,7 +22,7 @@ pub struct TocEntry {
 pub fn toc_to_markdown(entries: &[TocEntry], max_depth: Option<u8>) -> String {
     let filtered: Vec<&TocEntry> = entries
         .iter()
-        .filter(|e| max_depth.map_or(true, |max| level_to_u8(e.level) <= max))
+        .filter(|e| max_depth.is_none_or(|max| level_to_u8(e.level) <= max))
         .collect();
     if filtered.is_empty() {
         return String::new();
@@ -61,7 +61,7 @@ pub fn toc_to_markdown(entries: &[TocEntry], max_depth: Option<u8>) -> String {
 pub fn toc_to_html(entries: &[TocEntry], max_depth: Option<u8>) -> String {
     let filtered: Vec<&TocEntry> = entries
         .iter()
-        .filter(|e| max_depth.map_or(true, |max| level_to_u8(e.level) <= max))
+        .filter(|e| max_depth.is_none_or(|max| level_to_u8(e.level) <= max))
         .collect();
     if filtered.is_empty() {
         return String::new();

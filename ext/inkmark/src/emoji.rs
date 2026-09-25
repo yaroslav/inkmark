@@ -16,34 +16,23 @@ use pulldown_cmark::{CowStr, Event, Tag, TagEnd};
 /// Tracks code-block nesting depth so shortcodes inside fenced code blocks
 /// are preserved. Inline code (`Event::Code`) is passed through untouched
 /// because we only scan `Event::Text` events.
-pub fn replace(events: &mut Vec<Event<'_>>) {
+pub fn replace(events: &mut [Event<'_>]) {
     let mut code_depth: usize = 0;
 
-    for i in 0..events.len() {
-        match &events[i] {
+    for event in events.iter_mut() {
+        match event {
             Event::Start(Tag::CodeBlock(_)) => {
                 code_depth += 1;
-                continue;
             }
             Event::End(TagEnd::CodeBlock) => {
                 code_depth = code_depth.saturating_sub(1);
-                continue;
             }
-            Event::Text(_) if code_depth == 0 => {}
-            _ => continue,
-        }
-
-        // Take ownership of the text so we can feed it to `replace_shortcodes`
-        // and emit a new Text event with the result.
-        if let Event::Text(text) = std::mem::replace(&mut events[i], Event::SoftBreak) {
-            match replace_shortcodes(&text) {
-                Some(replaced) => {
-                    events[i] = Event::Text(CowStr::Boxed(replaced.into_boxed_str()));
-                }
-                None => {
-                    events[i] = Event::Text(text);
+            Event::Text(text) if code_depth == 0 => {
+                if let Some(replaced) = replace_shortcodes(text) {
+                    *text = CowStr::Boxed(replaced.into_boxed_str());
                 }
             }
+            _ => {}
         }
     }
 }

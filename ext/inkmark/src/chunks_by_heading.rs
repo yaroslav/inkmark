@@ -54,17 +54,15 @@ pub fn native_chunks_by_heading(
     // when there are no headings at all. Emitted as an entry with
     // `heading: nil, level: 0, id: nil`. Skipped entirely when there
     // is no non-empty content before the first heading.
-    let with_counts = flags.statistics;
+    let content_opts = ContentOptions {
+        with_counts: flags.statistics,
+        truncate_params: truncate_params.as_ref(),
+    };
     let preamble_end = boundaries.first().map(|b| b.start).unwrap_or(events.len());
     if preamble_end > 0 {
         let preamble_events = &events[0..preamble_end];
         if !is_empty_content(preamble_events) {
-            result.push(build_preamble_hash(
-                ruby,
-                preamble_events,
-                with_counts,
-                truncate_params.as_ref(),
-            )?)?;
+            result.push(build_preamble_hash(ruby, preamble_events, &content_opts)?)?;
         }
     }
 
@@ -87,16 +85,17 @@ pub fn native_chunks_by_heading(
         }
         let breadcrumb: Vec<&str> = ancestors.iter().map(|(_, t)| t.as_str()).collect();
         let heading_text = collect_inline_text(&events[(boundary.start + 1)..boundary.end]);
+        // Content = events after End(Heading) up to the next section or
+        // end of document. Re-serialized through cmark_write.
+        let content_events = &events[(boundary.end + 1)..section_end];
         let hash = build_section_hash(
             ruby,
-            &events,
-            boundary,
-            section_end,
+            boundary.level,
             &heading_text,
             &breadcrumb,
+            content_events,
             &mut dedup,
-            with_counts,
-            truncate_params.as_ref(),
+            &content_opts,
         )?;
         result.push(hash)?;
         ancestors.push((level, heading_text));
@@ -111,6 +110,13 @@ struct HeadingBoundary {
     start: usize,
     end: usize,
     level: HeadingLevel,
+}
+
+/// How each entry's `content` is rendered: optionally truncated, and
+/// optionally accompanied by `character_count` / `word_count`.
+struct ContentOptions<'a> {
+    with_counts: bool,
+    truncate_params: Option<&'a TruncateParams>,
 }
 
 fn find_heading_boundaries(events: &[Event<'_>]) -> Vec<HeadingBoundary> {
@@ -165,8 +171,7 @@ fn find_section_end(boundaries: &[HeadingBoundary], i: usize, events_len: usize)
 fn build_preamble_hash(
     ruby: &Ruby,
     events: &[Event<'_>],
-    with_counts: bool,
-    truncate_params: Option<&TruncateParams>,
+    content_opts: &ContentOptions<'_>,
 ) -> Result<RHash, Error> {
     let hash = ruby.hash_new();
     hash.aset(ruby.to_symbol("heading"), ())?;
@@ -176,12 +181,12 @@ fn build_preamble_hash(
     // with proper sections so callers can treat every entry alike.
     hash.aset(ruby.to_symbol("breadcrumb"), ruby.ary_new_capa(0))?;
 
-    let content = match truncate_params {
+    let content = match content_opts.truncate_params {
         Some(params) => truncate::truncate_events(events, params),
         None => render_markdown(events),
     };
-    if with_counts {
-        let (chars, words) = count_post_truncate(events, truncate_params, &content);
+    if content_opts.with_counts {
+        let (chars, words) = count_post_truncate(events, content_opts.truncate_params, &content);
         hash.aset(ruby.to_symbol("character_count"), chars)?;
         hash.aset(ruby.to_symbol("word_count"), words)?;
     }
@@ -191,14 +196,12 @@ fn build_preamble_hash(
 
 fn build_section_hash(
     ruby: &Ruby,
-    events: &[Event<'_>],
-    boundary: &HeadingBoundary,
-    section_end: usize,
+    level: HeadingLevel,
     heading_text: &str,
     breadcrumb: &[&str],
+    content_events: &[Event<'_>],
     dedup: &mut SlugDeduplicator,
-    with_counts: bool,
-    truncate_params: Option<&TruncateParams>,
+    content_opts: &ContentOptions<'_>,
 ) -> Result<RHash, Error> {
     // Slug is the deduplicated slugify of the (filter-applied) heading
     // text, matching the ids `heading_ids` / `toc` would emit for the
@@ -210,13 +213,9 @@ fn build_section_hash(
         dedup.deduplicate(base)
     };
 
-    // Content = events after End(Heading) up to the next section or
-    // end of document. Re-serialized through cmark_write.
-    let content_events = &events[(boundary.end + 1)..section_end];
-
     let hash = ruby.hash_new();
     hash.aset(ruby.to_symbol("heading"), heading_text)?;
-    hash.aset(ruby.to_symbol("level"), toc::level_to_u8(boundary.level))?;
+    hash.aset(ruby.to_symbol("level"), toc::level_to_u8(level))?;
     if id.is_empty() {
         hash.aset(ruby.to_symbol("id"), ())?;
     } else {
@@ -228,12 +227,13 @@ fn build_section_hash(
     }
     hash.aset(ruby.to_symbol("breadcrumb"), breadcrumb_arr)?;
 
-    let content = match truncate_params {
+    let content = match content_opts.truncate_params {
         Some(params) => truncate::truncate_events(content_events, params),
         None => render_markdown(content_events),
     };
-    if with_counts {
-        let (chars, words) = count_post_truncate(content_events, truncate_params, &content);
+    if content_opts.with_counts {
+        let (chars, words) =
+            count_post_truncate(content_events, content_opts.truncate_params, &content);
         hash.aset(ruby.to_symbol("character_count"), chars)?;
         hash.aset(ruby.to_symbol("word_count"), words)?;
     }
