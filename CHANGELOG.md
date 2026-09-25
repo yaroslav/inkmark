@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Updated dependencies, including magnus 0.9.
+
 ## [0.2.0] - 2026-09-06
 
 - Ractor-safe: the native extension declares `rb_ext_ractor_safe`, and every public API works from non-main Ractors.
