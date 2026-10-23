@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Updated dependencies, including pulldown-cmark 0.13.5 (upstream security fixes) and magnus 0.9.3.
+
 ## [0.2.1] - 2026-09-25
 
 - Updated dependencies, including magnus 0.9.
