@@ -35,8 +35,10 @@ pub struct SchemeFilter<'e, 's, I: Iterator<Item = Event<'e>>> {
     // disallows nested links so this is usually 1, but the counter keeps
     // us correct on malformed / extension-emitted streams.
     skipping_link_depth: usize,
-    // State for in-progress image drop.
-    skipping_image: bool,
+    // State for in-progress image drop, counted like links: an image can
+    // nest in another image's alt text (`![a ![b](x)](y)`). 0 = not
+    // skipping.
+    skipping_image_depth: usize,
     image_alt: String,
 }
 
@@ -51,7 +53,7 @@ impl<'e, 's, I: Iterator<Item = Event<'e>>> SchemeFilter<'e, 's, I> {
             link_allowed,
             image_allowed,
             skipping_link_depth: 0,
-            skipping_image: false,
+            skipping_image_depth: 0,
             image_alt: String::new(),
         }
     }
@@ -63,10 +65,17 @@ impl<'e, 's, I: Iterator<Item = Event<'e>>> Iterator for SchemeFilter<'e, 's, I>
     fn next(&mut self) -> Option<Event<'e>> {
         loop {
             // Image skipping mode
-            if self.skipping_image {
+            if self.skipping_image_depth > 0 {
                 match self.inner.next()? {
+                    Event::Start(Tag::Image { .. }) => {
+                        self.skipping_image_depth += 1;
+                        continue;
+                    }
                     Event::End(TagEnd::Image) => {
-                        self.skipping_image = false;
+                        self.skipping_image_depth -= 1;
+                        if self.skipping_image_depth > 0 {
+                            continue;
+                        }
                         if !self.image_alt.is_empty() {
                             let alt = std::mem::take(&mut self.image_alt);
                             return Some(Event::Text(CowStr::Boxed(alt.into_boxed_str())));
@@ -117,7 +126,7 @@ impl<'e, 's, I: Iterator<Item = Event<'e>>> Iterator for SchemeFilter<'e, 's, I>
                         .image_allowed
                         .is_some_and(|s| !is_scheme_allowed(dest_url, s)) =>
                 {
-                    self.skipping_image = true;
+                    self.skipping_image_depth = 1;
                     self.image_alt.clear();
                     continue;
                 }
@@ -160,6 +169,22 @@ mod tests {
         let out = run(events, Some(&allowed), None);
         assert_eq!(out.len(), 3);
         assert!(matches!(out[0], Event::Start(Tag::Link { .. })));
+    }
+
+    #[test]
+    fn drops_blocked_image_with_an_image_nested_in_its_alt_text() {
+        let source = "![foo ![bar](http://x.com/1)](http://x.com/2)";
+        let events: Vec<Event> = pulldown_cmark::Parser::new(source).collect();
+        let allowed = schemes(&["https"]);
+        let out = run(events, None, Some(&allowed));
+        assert!(
+            !out.iter().any(|e| matches!(
+                e,
+                Event::Start(Tag::Image { .. }) | Event::End(TagEnd::Image)
+            )),
+            "stray image event: {out:?}"
+        );
+        assert!(out.contains(&Event::Text(CowStr::Borrowed("foo bar"))));
     }
 
     #[test]

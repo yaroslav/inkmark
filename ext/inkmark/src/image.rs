@@ -1,7 +1,7 @@
 //! Image attribute injection filter and URL matcher.
 //!
 //! When enabled, replaces pulldown-cmark's default image event sequence
-//! (`Start(Tag::Image) ... End(TagEnd::Image)`) with a single `Event::Html`
+//! (`Start(Tag::Image) ... End(TagEnd::Image)`) with a single `Event::InlineHtml`
 //! carrying a hand-built `<img>` tag that includes the "modern" loading and
 //! decoding hints:
 //!
@@ -23,7 +23,7 @@ use pulldown_cmark_escape::{escape_href, escape_html};
 
 use crate::url_match::is_host_allowed;
 
-/// Rewrite every image in the event stream as a self-contained `Event::Html`
+/// Rewrite every image in the event stream as a self-contained `Event::InlineHtml`
 /// carrying `<img ... loading="lazy" decoding="async">`.
 ///
 /// We consume the input Vec to own each event, then rebuild with
@@ -38,22 +38,9 @@ pub fn add_lazy_loading(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
             Event::Start(Tag::Image {
                 dest_url, title, ..
             }) => {
-                // Consume events up to the matching End(Image), accumulating
-                // alt text from Text and Code payloads. Images can contain
-                // inline formatting (e.g. `![**bold**](img.png)`), which
-                // produces Start(Strong)/Text/End(Strong) events; the bare
-                // text content is what we want for the alt attribute.
-                let mut alt = String::new();
-                for inner in iter.by_ref() {
-                    match inner {
-                        Event::End(TagEnd::Image) => break,
-                        Event::Text(t) | Event::Code(t) => alt.push_str(&t),
-                        _ => {}
-                    }
-                }
-
+                let alt = take_alt_text(&mut iter);
                 let html = build_img_tag(&dest_url, &alt, &title);
-                out.push(Event::Html(CowStr::Boxed(html.into_boxed_str())));
+                out.push(Event::InlineHtml(CowStr::Boxed(html.into_boxed_str())));
             }
             other => out.push(other),
         }
@@ -68,10 +55,8 @@ pub fn add_lazy_loading(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
 /// when alt is empty. Non-web URLs pass through: [`is_host_allowed`]
 /// returns true for any URL with no parseable host.
 ///
-/// Alt accumulation matches `add_lazy_loading`: images can contain
-/// markdown like `![**bold**](img.png)`, producing
-/// Start(Strong)/Text/End(Strong) events—we pull the raw text payloads
-/// out and discard formatting.
+/// Alt accumulation is shared with `add_lazy_loading` (see
+/// [`take_alt_text`]).
 pub fn filter_by_hosts<'a>(events: Vec<Event<'a>>, set: &GlobSet) -> Vec<Event<'a>> {
     let mut out: Vec<Event<'a>> = Vec::with_capacity(events.len());
     let mut iter = events.into_iter();
@@ -79,14 +64,7 @@ pub fn filter_by_hosts<'a>(events: Vec<Event<'a>>, set: &GlobSet) -> Vec<Event<'
     while let Some(event) = iter.next() {
         match event {
             Event::Start(Tag::Image { ref dest_url, .. }) if !is_host_allowed(dest_url, set) => {
-                let mut alt = String::new();
-                for inner in iter.by_ref() {
-                    match inner {
-                        Event::End(TagEnd::Image) => break,
-                        Event::Text(t) | Event::Code(t) => alt.push_str(&t),
-                        _ => {}
-                    }
-                }
+                let alt = take_alt_text(&mut iter);
                 if !alt.is_empty() {
                     out.push(Event::Text(CowStr::Boxed(alt.into_boxed_str())));
                 }
@@ -96,6 +74,30 @@ pub fn filter_by_hosts<'a>(events: Vec<Event<'a>>, set: &GlobSet) -> Vec<Event<'
     }
 
     out
+}
+
+/// Consume events through the `End(Image)` matching an already-consumed
+/// `Start(Image)` and return the alt text: the raw Text and Code payloads,
+/// with formatting (`![**bold**](img.png)`) discarded. An image nested in
+/// the alt text (`![a ![b](x)](y)`) contributes its text too, so depth is
+/// counted to stop at the matching End rather than the nested image's.
+fn take_alt_text<'a>(iter: &mut impl Iterator<Item = Event<'a>>) -> String {
+    let mut alt = String::new();
+    let mut depth: usize = 1;
+    for inner in iter {
+        match inner {
+            Event::Start(Tag::Image { .. }) => depth += 1,
+            Event::End(TagEnd::Image) => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            Event::Text(t) | Event::Code(t) => alt.push_str(&t),
+            _ => {}
+        }
+    }
+    alt
 }
 
 /// Construct the `<img>` HTML string with `loading="lazy"` and
@@ -201,7 +203,7 @@ mod tests {
         let out = add_lazy_loading(events);
         assert_eq!(out.len(), 1, "should collapse to one event");
         match &out[0] {
-            Event::Html(html) => {
+            Event::InlineHtml(html) => {
                 assert!(
                     html.contains("loading="),
                     "missing loading attribute: {html}"
@@ -231,6 +233,31 @@ mod tests {
             Event::Text(t) => assert_eq!(t.as_ref(), "fallback alt"),
             other => panic!("expected Text event, got {other:?}"),
         }
+    }
+
+    fn has_image_event(events: &[Event<'_>]) -> bool {
+        events.iter().any(|e| {
+            matches!(
+                e,
+                Event::Start(Tag::Image { .. }) | Event::End(TagEnd::Image)
+            )
+        })
+    }
+
+    #[test]
+    fn image_nested_in_alt_text_is_consumed_with_its_parent() {
+        let source = "![foo ![bar](https://evil.com/1)](https://evil.com/2)";
+        let events: Vec<Event> = pulldown_cmark::Parser::new(source).collect();
+
+        let dropped = filter_by_hosts(events.clone(), &host_set(&["example.net"]));
+        assert!(!has_image_event(&dropped), "stray image event: {dropped:?}");
+        assert!(dropped.contains(&Event::Text(CowStr::Borrowed("foo bar"))));
+
+        let lazy = add_lazy_loading(events);
+        assert!(!has_image_event(&lazy), "stray image event: {lazy:?}");
+        assert!(lazy
+            .iter()
+            .any(|e| matches!(e, Event::InlineHtml(h) if h.contains("alt=\"foo bar\""))));
     }
 
     #[test]

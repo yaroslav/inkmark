@@ -14,6 +14,7 @@ mod heading;
 mod highlight;
 mod image;
 mod link;
+mod markdown;
 mod options;
 mod plain_text;
 mod scheme_filter;

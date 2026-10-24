@@ -18,8 +18,9 @@ use pulldown_cmark_escape::{escape_href, escape_html};
 use crate::url_match::is_host_allowed;
 
 /// Add `rel="nofollow noopener"` to every external `<a>` tag by replacing
-/// its `Start(Link)` event with a synthesized `Event::Html` opening tag
-/// and its matching `End(Link)` event with a `</a>` close tag.
+/// its `Start(Link)` event with a synthesized `Event::InlineHtml` opening
+/// tag and its matching `End(Link)` event with a `</a>` close tag. Inline,
+/// not block, HTML: the Markdown serializer needs to know it sits in a line.
 pub fn add_nofollow(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
     let mut out: Vec<Event<'_>> = Vec::with_capacity(events.len());
     let mut iter = events.into_iter();
@@ -33,7 +34,7 @@ pub fn add_nofollow(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
                 id: _,
             }) if is_external(dest_url) => {
                 let open = build_link_open(dest_url, title);
-                out.push(Event::Html(CowStr::Boxed(open.into_boxed_str())));
+                out.push(Event::InlineHtml(CowStr::Boxed(open.into_boxed_str())));
 
                 // Consume inner events through the matching End(Link),
                 // depth-counting so a nested link doesn't break the
@@ -51,7 +52,7 @@ pub fn add_nofollow(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
                     } else if is_link_end {
                         depth -= 1;
                         if depth == 0 {
-                            out.push(Event::Html(CowStr::Borrowed("</a>")));
+                            out.push(Event::InlineHtml(CowStr::Borrowed("</a>")));
                             break;
                         }
                         out.push(inner);
@@ -209,10 +210,10 @@ mod tests {
             Event::End(TagEnd::Link),
         ];
         let out = add_nofollow(events);
-        // Should produce: Html(open), Text("click"), Html("</a>")
+        // Should produce: InlineHtml(open), Text("click"), InlineHtml("</a>")
         assert_eq!(out.len(), 3, "expected 3 events, got {}", out.len());
         match &out[0] {
-            Event::Html(html) => {
+            Event::InlineHtml(html) => {
                 assert!(
                     html.contains("nofollow"),
                     "opening tag must contain nofollow: {html}"
@@ -222,11 +223,11 @@ mod tests {
                     "opening tag must contain href: {html}"
                 );
             }
-            other => panic!("expected Html open event, got {other:?}"),
+            other => panic!("expected InlineHtml open event, got {other:?}"),
         }
         match &out[2] {
-            Event::Html(html) => assert_eq!(html.as_ref(), "</a>"),
-            other => panic!("expected Html close event, got {other:?}"),
+            Event::InlineHtml(html) => assert_eq!(html.as_ref(), "</a>"),
+            other => panic!("expected InlineHtml close event, got {other:?}"),
         }
     }
 
