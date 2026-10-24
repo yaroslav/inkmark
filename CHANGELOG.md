@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.0] - 2026-10-24
 
 - Breaking: Markdown output (`to_markdown`, `chunks_by_heading`, `chunks_by_size`, `truncate_markdown`) uses pulldown-cmark-to-cmark 23; escaping and formatting differ from 0.2.
 - Fix raw HTML leaking into Markdown output with `raw_html: false` when a line held more than one tag.
