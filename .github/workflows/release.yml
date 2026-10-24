@@ -211,11 +211,18 @@ jobs:
 
       # Creates the git tag at github.sha and the GitHub Release in one call.
       # If this step fails, no tag is pushed — the orphan-tag risk is gone.
+      # Skipped when the release already exists, so re-running a publish that
+      # failed later on (e.g. mid gem push) gets through to the push step.
       - name: Create git tag and GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ needs.version.outputs.tag }}" \
+          TAG="${{ needs.version.outputs.tag }}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists, skipping"
+            exit 0
+          fi
+          gh release create "${TAG}" \
             --target "${{ github.sha }}" \
             --title "Inkmark ${{ needs.version.outputs.version }}" \
             --notes-file /tmp/release_notes.md \
@@ -224,9 +231,17 @@ jobs:
       - name: Configure RubyGems credentials
         uses: rubygems/configure-rubygems-credentials@main
 
+      # Skips gems RubyGems already has, so a re-run after a partial push
+      # publishes only the missing platforms instead of failing on the first.
       - name: Push gems to RubyGems
         run: |
+          published=$(curl -fsS https://rubygems.org/api/v1/versions/inkmark.json \
+            | ruby -rjson -e 'JSON.parse($stdin.read).each { |v| puts ["inkmark", v["number"], (v["platform"] unless v["platform"] == "ruby")].compact.join("-") + ".gem" }')
           for gem in pkg/*.gem; do
+            if grep -qxF "$(basename "${gem}")" <<<"${published}"; then
+              echo "Skipping ${gem}: already on RubyGems"
+              continue
+            fi
             echo "Pushing ${gem}"
             gem push "${gem}"
           done
