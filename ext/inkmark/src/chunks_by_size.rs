@@ -22,6 +22,7 @@ use pulldown_cmark::Event;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::document::{apply_filters, content_events};
+use crate::markdown::{self, SerializeError};
 use crate::options::build_options;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,10 +49,12 @@ pub fn native_chunks_by_size(
     let events: Vec<Event> = content_events(&source, cm_opts).collect();
     let events = apply_filters(events, &flags);
 
+    let md_opts = markdown::serializer_options(cm_opts, &flags);
     let windows = match params.at {
-        BoundaryAt::Block => chunk_blocks(&events, &params),
-        BoundaryAt::Word => chunk_words(&events, &params),
-    };
+        BoundaryAt::Block => chunk_blocks(&events, &params, md_opts),
+        BoundaryAt::Word => chunk_words(&events, &params, md_opts),
+    }
+    .map_err(|e| markdown::to_ruby_error(ruby, e))?;
 
     build_result(ruby, &windows, flags.statistics)
 }
@@ -79,20 +82,30 @@ fn parse_params(ruby: &Ruby, hash: &RHash) -> Result<WindowParams, Error> {
     })
 }
 
-fn chunk_blocks(events: &[Event<'_>], params: &WindowParams) -> Vec<String> {
+fn chunk_blocks(
+    events: &[Event<'_>],
+    params: &WindowParams,
+    md_opts: pulldown_cmark::Options,
+) -> Result<Vec<String>, SerializeError> {
     let mut out: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut current_chars: usize = 0;
     let mut current_words: usize = 0;
 
     for (start, end) in top_level_blocks(events) {
-        let block = render_markdown(&events[start..=end]);
+        let block = markdown::render_block(&events[start..=end], md_opts)?;
         let block_chars = block.chars().count();
         let block_words = block.unicode_words().count();
+        // The blank line rejoining blocks counts toward the char budget.
+        let separator_chars = if current.is_empty() {
+            0
+        } else {
+            markdown::BLOCK_SEPARATOR.len()
+        };
 
         let would_exceed_chars = params
             .chars
-            .map(|b| current_chars + block_chars > b)
+            .map(|b| current_chars + separator_chars + block_chars > b)
             .unwrap_or(false);
         let would_exceed_words = params
             .words
@@ -110,6 +123,11 @@ fn chunk_blocks(events: &[Event<'_>], params: &WindowParams) -> Vec<String> {
             out.push(finished);
         }
 
+        // Re-checked: a flush leaves `current` holding the overlap seed.
+        if !current.is_empty() {
+            current.push_str(markdown::BLOCK_SEPARATOR);
+            current_chars += markdown::BLOCK_SEPARATOR.len();
+        }
         current.push_str(&block);
         current_chars += block_chars;
         current_words += block_words;
@@ -118,7 +136,7 @@ fn chunk_blocks(events: &[Event<'_>], params: &WindowParams) -> Vec<String> {
     if !current.is_empty() {
         out.push(current);
     }
-    out
+    Ok(out)
 }
 
 /// Return the trailing `overlap` characters of `s`, aligned to a
@@ -167,13 +185,6 @@ fn top_level_blocks(events: &[Event<'_>]) -> Vec<(usize, usize)> {
     blocks
 }
 
-fn render_markdown(events: &[Event<'_>]) -> String {
-    let mut buf = String::new();
-    pulldown_cmark_to_cmark::cmark(events.iter().cloned(), &mut buf)
-        .expect("markdown serialization failed");
-    buf
-}
-
 // Serialize the full filtered Markdown into one string, then walk
 // word boundaries. Each window is a byte-aligned slice of the
 // serialized output ending at a word boundary that fits the budget.
@@ -181,10 +192,14 @@ fn render_markdown(events: &[Event<'_>]) -> String {
 // `overlap` chars (to the next word boundary) before taking the
 // next window.
 
-fn chunk_words(events: &[Event<'_>], params: &WindowParams) -> Vec<String> {
-    let rendered = render_markdown(events);
+fn chunk_words(
+    events: &[Event<'_>],
+    params: &WindowParams,
+    md_opts: pulldown_cmark::Options,
+) -> Result<Vec<String>, SerializeError> {
+    let rendered = markdown::render(events, md_opts)?;
     if rendered.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut out: Vec<String> = Vec::new();
@@ -250,7 +265,7 @@ fn chunk_words(events: &[Event<'_>], params: &WindowParams) -> Vec<String> {
         };
     }
 
-    out
+    Ok(out)
 }
 
 /// Step the cursor back by roughly `overlap` characters, then land on

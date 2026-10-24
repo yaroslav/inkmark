@@ -11,6 +11,7 @@ use pulldown_cmark::Event;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::document::{apply_filters, content_events};
+use crate::markdown::{self, SerializeError};
 use crate::options::{build_options, Flags};
 
 /// What kind of boundary to cut at.
@@ -43,10 +44,14 @@ pub fn truncate_source(
     cm_opts: pulldown_cmark::Options,
     flags: &Flags,
     params: &TruncateParams,
-) -> String {
+) -> Result<String, SerializeError> {
     let events: Vec<Event> = content_events(source, cm_opts).collect();
     let events = apply_filters(events, flags);
-    truncate_events(&events, params)
+    truncate_events(
+        &events,
+        params,
+        markdown::serializer_options(cm_opts, flags),
+    )
 }
 
 /// Ruby-facing entry point. Expects `params_hash` to contain
@@ -61,7 +66,7 @@ pub fn native_truncate_markdown(
 ) -> Result<String, Error> {
     let (cm_opts, flags) = build_options(ruby, opts_hash)?;
     let params = parse_params(ruby, params_hash)?;
-    Ok(truncate_source(&source, cm_opts, &flags, &params))
+    truncate_source(&source, cm_opts, &flags, &params).map_err(|e| markdown::to_ruby_error(ruby, e))
 }
 
 pub fn parse_params(ruby: &Ruby, hash: RHash) -> Result<TruncateParams, Error> {
@@ -85,14 +90,22 @@ pub fn parse_params(ruby: &Ruby, hash: RHash) -> Result<TruncateParams, Error> {
 }
 
 /// Core truncation over a filter-applied event slice.
-pub fn truncate_events(events: &[Event<'_>], params: &TruncateParams) -> String {
+pub fn truncate_events(
+    events: &[Event<'_>],
+    params: &TruncateParams,
+    md_opts: pulldown_cmark::Options,
+) -> Result<String, SerializeError> {
     match params.at {
-        TruncateAt::Block => truncate_at_block(events, params),
-        TruncateAt::Word => truncate_at_word(events, params),
+        TruncateAt::Block => truncate_at_block(events, params, md_opts),
+        TruncateAt::Word => truncate_at_word(events, params, md_opts),
     }
 }
 
-fn truncate_at_block(events: &[Event<'_>], params: &TruncateParams) -> String {
+fn truncate_at_block(
+    events: &[Event<'_>],
+    params: &TruncateParams,
+    md_opts: pulldown_cmark::Options,
+) -> Result<String, SerializeError> {
     let marker_chars = marker_chars(&params.marker);
     let marker_words = marker_words(&params.marker);
     let char_budget = params.chars.map(|n| n.saturating_sub(marker_chars));
@@ -104,8 +117,14 @@ fn truncate_at_block(events: &[Event<'_>], params: &TruncateParams) -> String {
     let mut any_dropped = false;
 
     for (start, end) in top_level_blocks(events) {
-        let block = render_markdown(&events[start..=end]);
-        let block_chars = block.trim_end().chars().count();
+        let block = markdown::render_block(&events[start..=end], md_opts)?;
+        // The blank line rejoining blocks counts toward the char budget.
+        let separator = if kept.is_empty() {
+            ""
+        } else {
+            markdown::BLOCK_SEPARATOR
+        };
+        let block_chars = separator.len() + block.trim_end().chars().count();
         let block_words = block.unicode_words().count();
 
         let would_exceed_chars = char_budget
@@ -120,6 +139,7 @@ fn truncate_at_block(events: &[Event<'_>], params: &TruncateParams) -> String {
             break;
         }
 
+        kept.push_str(separator);
         kept.push_str(&block);
         used_chars += block_chars;
         used_words += block_words;
@@ -127,12 +147,12 @@ fn truncate_at_block(events: &[Event<'_>], params: &TruncateParams) -> String {
 
     // If nothing was dropped and source fit, return unchanged (no marker).
     if !any_dropped {
-        return kept;
+        return Ok(kept);
     }
 
     // First block alone exceeded the budget; honest empty return
     if kept.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
 
     // Trim trailing whitespace before appending the marker so the
@@ -145,7 +165,7 @@ fn truncate_at_block(events: &[Event<'_>], params: &TruncateParams) -> String {
         kept.push_str(marker);
     }
     kept.push('\n');
-    kept
+    Ok(kept)
 }
 
 /// Return (start, end) event-index pairs for top-level blocks.
@@ -185,15 +205,12 @@ fn top_level_blocks(events: &[Event<'_>]) -> Vec<(usize, usize)> {
     blocks
 }
 
-fn render_markdown(events: &[Event<'_>]) -> String {
-    let mut buf = String::new();
-    pulldown_cmark_to_cmark::cmark(events.iter().cloned(), &mut buf)
-        .expect("markdown serialization failed");
-    buf
-}
-
-fn truncate_at_word(events: &[Event<'_>], params: &TruncateParams) -> String {
-    let rendered = render_markdown(events);
+fn truncate_at_word(
+    events: &[Event<'_>],
+    params: &TruncateParams,
+    md_opts: pulldown_cmark::Options,
+) -> Result<String, SerializeError> {
+    let rendered = markdown::render(events, md_opts)?;
     let marker_chars = marker_chars(&params.marker);
     let marker_words = marker_words(&params.marker);
 
@@ -211,7 +228,7 @@ fn truncate_at_word(events: &[Event<'_>], params: &TruncateParams) -> String {
 
     // Fits under both budgets: return unchanged, no marker.
     if chars_ok && words_ok {
-        return rendered;
+        return Ok(rendered);
     }
 
     let char_budget = params.chars.map(|n| n.saturating_sub(marker_chars));
@@ -252,7 +269,7 @@ fn truncate_at_word(events: &[Event<'_>], params: &TruncateParams) -> String {
     if let Some(marker) = &params.marker {
         out.push_str(marker);
     }
-    out
+    Ok(out)
 }
 
 fn marker_chars(marker: &Option<String>) -> usize {

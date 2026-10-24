@@ -206,6 +206,9 @@ Inkmark.to_html("<script>alert(1)</script>")
 # => "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n"
 ```
 
+Markdown output escapes it too; see
+[Raw HTML in the source](#raw-html-in-the-source).
+
 Enable pass-through with `raw_html: true`; _only do this for trusted
 input_:
 
@@ -402,6 +405,12 @@ Sections are **hierarchical**: a `##` section's `:content` includes any
 nested `###` subsections, which also appear as their own entries. Content
 before the first heading (if any) becomes a preamble entry with
 `heading: nil` and `level: 0`.
+
+Only **top-level** headings start a section. A heading inside a block
+quote or list item (such as a `## Tip` in a `> [!NOTE]` callout) stays in
+the content of the section around it, so the quote or list is never split
+across sections. It still counts toward slug deduplication, so every
+section's `:id` matches the anchor `headings: { ids: true }` generates.
 
 `:breadcrumb` carries the ancestor heading texts from root to immediate
 parent. Root-level sections and the preamble have an empty array. Skipped
@@ -739,6 +748,17 @@ Inkmark.to_markdown(source, options: {
   syntax_highlight: false,         # would embed <pre><span...> blocks
 })
 ```
+
+### Raw HTML in the source
+
+With `raw_html: false` (the default), raw HTML from the source comes out of
+`to_markdown`, `chunks_by_heading`, `chunks_by_size`, and `truncate_markdown`
+escaped, so the Markdown stays inert even if a later stage renders it with raw
+HTML allowed. HTML produced by the HTML-emitting filters above is the
+exception: it is embedded as described.
+
+If the filtered document cannot be written back as Markdown, these methods
+raise `Inkmark::Error`.
 
 ## Event handlers
 

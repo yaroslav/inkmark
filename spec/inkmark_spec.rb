@@ -941,6 +941,11 @@ RSpec.describe Inkmark do
         expect(html).to include('loading="lazy"')
       end
 
+      it "treats an image nested in another image's alt text as alt text" do
+        md = described_class.to_markdown("![foo ![bar](/url)](/url2)", options: {images: {lazy: true}})
+        expect(md).to eq(%(<img src="/url2" alt="foo bar" loading="lazy" decoding="async" />))
+      end
+
       it "escapes HTML specials in alt text" do
         html = described_class.to_html('![a"b<c>d&e](img.png)', options: {images: {lazy: true}})
         expect(html).to include("&quot;")
@@ -1082,6 +1087,46 @@ RSpec.describe Inkmark do
       end
     end
 
+    context "in Markdown output by default" do
+      let(:source) { "<div onclick=\"x()\">\n*inside*\n</div>\n\npara" }
+
+      def live_div?(markdown)
+        described_class.to_html(markdown, options: {raw_html: true}).include?("<div")
+      end
+
+      it "keeps block-level raw HTML inert in to_markdown" do
+        expect(live_div?(described_class.to_markdown(source))).to be(false)
+      end
+
+      it "keeps block-level raw HTML inert on the buffered to_markdown path" do
+        md = described_class.to_markdown(source, options: {emoji_shortcodes: true})
+        expect(live_div?(md)).to be(false)
+      end
+
+      it "keeps block-level raw HTML inert in chunks_by_heading content" do
+        sections = described_class.chunks_by_heading("# A\n\n#{source}")
+        expect(live_div?(sections.last[:content])).to be(false)
+      end
+
+      it "keeps block-level raw HTML inert in truncate_markdown" do
+        expect(live_div?(described_class.truncate_markdown(source, chars: 200))).to be(false)
+      end
+
+      it "keeps raw HTML inert where block-mode output joins an HTML block and indented code" do
+        src = "  <!-- foo -->\n\n    <!-- foo -->\n"
+        content = described_class.chunks_by_size(src, chars: 400).first[:content]
+        html = described_class.to_html(content, options: {raw_html: true})
+        expect(html).to include("<pre><code>&lt;!-- foo --&gt;")
+        expect(html).not_to match(/^<!--/)
+      end
+
+      it "keeps the escaped HTML text in the output" do
+        html = described_class.to_html(described_class.to_markdown(source), options: {raw_html: true})
+        expect(html).to include("&lt;div")
+        expect(html).to include("para")
+      end
+    end
+
     context "when raw_html is true" do
       it "passes raw HTML through unchanged" do
         html = described_class.to_html("<em>raw</em>", options: {raw_html: true})
@@ -1211,6 +1256,40 @@ RSpec.describe Inkmark do
       md = "```ruby\nx = 1\n```"
       g = described_class.new(md, options: {syntax_highlight: true})
       expect(g.to_markdown).to include("<pre")
+    end
+
+    it "keeps generated heading ids as attributes, including on headings with inline markup" do
+      md = described_class.to_markdown("# foo *bar*", options: {headings: {ids: true}})
+      expect(md).to eq("# foo *bar* { #foo-bar }")
+    end
+
+    it "unwraps a disallowed link whose text ends in a line break inside emphasis" do
+      md = described_class.to_markdown("**[text\n](https://evil.com)**", options: {links: {allowed_hosts: []}})
+      expect(described_class.to_html(md)).to include("<strong>text</strong>")
+    end
+
+    it "embeds nofollow links next to emphasis" do
+      md = described_class.to_markdown("**a** [x](https://e.com)", options: {links: {nofollow: true}})
+      expect(md).to include("**a**")
+      expect(md).to include(%(rel="nofollow noopener"))
+    end
+
+    it "drops a disallowed-host image whose alt text holds another image" do
+      md = described_class.to_markdown("![foo ![bar](https://x.com/1)](https://x.com/2)",
+        options: {images: {allowed_hosts: []}})
+      expect(md).to eq("foo bar")
+    end
+
+    it "drops a disallowed-scheme image whose alt text holds another image" do
+      md = described_class.to_markdown("![foo ![bar](http://x.com/1)](http://x.com/2)",
+        options: {images: {allowed_schemes: ["https"]}})
+      expect(md).to eq("foo bar")
+    end
+
+    it "embeds lazy images next to emphasis" do
+      md = described_class.to_markdown("**a** ![cat](c.png)", options: {images: {lazy: true}})
+      expect(md).to include("**a**")
+      expect(md).to include(%(loading="lazy"))
     end
   end
 
@@ -1375,6 +1454,18 @@ RSpec.describe Inkmark do
       it "uses a custom marker" do
         result = described_class.truncate_markdown(doc, chars: 80, at: :block, marker: "[…]")
         expect(result).to include("[…]")
+      end
+
+      it "keeps kept blocks separate" do
+        result = described_class.truncate_markdown(doc, chars: 120, at: :block)
+        expect(described_class.to_html(result).scan("<p>").size).to eq(3)
+        expect(result).to include("here.\n\nSecond paragraph")
+      end
+
+      it "counts block separators toward the budget" do
+        budget = 120
+        result = described_class.truncate_markdown(doc, chars: budget, at: :block)
+        expect(result.chomp.chars.count).to be <= budget
       end
 
       it "returns empty when the first block alone exceeds the budget" do
@@ -1581,6 +1672,61 @@ RSpec.describe Inkmark do
       sections = described_class.chunks_by_heading(doc)
       usage = sections.find { |s| s[:heading] == "Usage" }
       expect(usage[:content]).not_to include("MIT")
+    end
+
+    context "with headings nested in block quotes or list items" do
+      let(:callout_doc) do
+        <<~MD
+          Intro
+
+          > [!NOTE]
+          > ## Tip
+          > Use it.
+
+          After the quote.
+
+          # Real
+
+          Body
+        MD
+      end
+
+      it "starts sections only at top-level headings" do
+        sections = described_class.chunks_by_heading(callout_doc)
+        expect(sections.map { |s| s[:heading] }).to eq([nil, "Real"])
+      end
+
+      it "keeps the whole block quote, nested heading included, in the surrounding section" do
+        preamble = described_class.chunks_by_heading(callout_doc).first
+        html = described_class.to_html(preamble[:content])
+        expect(html).to match(%r{<blockquote[^>]*>\s*<h2>Tip</h2>.*Use it\..*</blockquote>}m)
+        expect(html).to include("After the quote.")
+      end
+
+      it "handles a heading inside a block quote" do
+        sections = described_class.chunks_by_heading("> # Foo\n> bar\n> baz\n")
+        expect(sections.map { |s| s[:heading] }).to eq([nil])
+        expect(described_class.to_html(sections.first[:content])).to include("<h1>Foo</h1>")
+      end
+
+      it "handles a heading inside a list item" do
+        sections = described_class.chunks_by_heading("- # Foo\n- Bar\n")
+        expect(sections.map { |s| s[:heading] }).to eq([nil])
+        expect(described_class.to_html(sections.first[:content])).to include("<h1>Foo</h1>")
+      end
+
+      it "handles a nested heading when truncating sections" do
+        sections = described_class.chunks_by_heading(callout_doc, truncate: {chars: 40})
+        expect(sections.map { |s| s[:heading] }).to eq([nil, "Real"])
+      end
+
+      it "keeps section ids aligned with headings: { ids: true } when slugs collide" do
+        md = "> # Setup\n\n# Setup\n\nbody\n"
+        section = described_class.chunks_by_heading(md).find { |s| s[:heading] == "Setup" }
+        html = described_class.to_html(md, options: {headings: {ids: true}})
+        expect(section[:id]).to eq("setup-1")
+        expect(html).to include(%(<h1 id="setup-1">Setup</h1>))
+      end
     end
 
     context "breadcrumb" do
@@ -1804,6 +1950,14 @@ RSpec.describe Inkmark do
       it "assigns sequential 0-based indices" do
         windows = described_class.chunks_by_size(doc, chars: 300, at: :block)
         expect(windows.map { |w| w[:index] }).to eq((0...windows.size).to_a)
+      end
+
+      it "keeps blocks within a window separate" do
+        windows = described_class.chunks_by_size(doc, chars: 300, at: :block)
+        content = windows.first[:content]
+        paragraphs = content.scan("This is paragraph").size
+        expect(paragraphs).to be > 1
+        expect(described_class.to_html(content).scan("<p>").size).to eq(paragraphs)
       end
 
       it "keeps every window under the budget when the doc is decomposable" do

@@ -7,6 +7,7 @@ use crate::heading;
 use crate::highlight;
 use crate::image;
 use crate::link;
+use crate::markdown::{self, SerializeError};
 use crate::options::{build_options, Flags};
 use crate::plain_text;
 use crate::scheme_filter::SchemeFilter;
@@ -36,13 +37,14 @@ pub fn native_to_markdown(
     source: String,
     opts_hash: Option<RHash>,
 ) -> Result<String, Error> {
-    match opts_hash {
-        None => Ok(markdown_defaults(&source)),
+    let rendered = match opts_hash {
+        None => markdown_defaults(&source),
         Some(hash) => {
             let (cm_opts, flags) = build_options(ruby, hash)?;
-            Ok(render_to_markdown(&source, cm_opts, flags))
+            render_to_markdown(&source, cm_opts, flags)
         }
-    }
+    };
+    rendered.map_err(|e| markdown::to_ruby_error(ruby, e))
 }
 
 pub fn native_to_plain_text(
@@ -71,12 +73,13 @@ fn render_defaults(source: &str) -> String {
 }
 
 /// Same as render_defaults but serializes to Markdown instead of HTML.
-fn markdown_defaults(source: &str) -> String {
+fn markdown_defaults(source: &str) -> Result<String, SerializeError> {
     let mut buf = String::with_capacity(source.len());
-    let parser = Parser::new_ext(source, default_cm_opts());
+    let cm_opts = default_cm_opts();
+    let parser = Parser::new_ext(source, cm_opts);
     let filtered = parser.map(suppress_raw_html);
-    cmark_write(filtered, &mut buf);
-    buf
+    markdown::write(filtered, &mut buf, cm_opts)?;
+    Ok(buf)
 }
 
 /// Defaults-only plain-text fast path. Mirrors `markdown_defaults`:
@@ -255,22 +258,25 @@ fn render(source: &str, cm_opts: pulldown_cmark::Options, flags: Flags) -> Strin
     buf
 }
 
-fn render_to_markdown(source: &str, cm_opts: pulldown_cmark::Options, flags: Flags) -> String {
-    let mut buf = String::with_capacity(source.len());
-
+fn render_to_markdown(
+    source: &str,
+    cm_opts: pulldown_cmark::Options,
+    flags: Flags,
+) -> Result<String, SerializeError> {
     // `content_events` strips frontmatter, so the cmark serializer never sees
     // a metadata block to re-emit—on either the streaming or buffered path.
     if !needs_buffer(&flags) {
-        cmark_write(
+        let mut buf = String::with_capacity(source.len());
+        markdown::write(
             content_events(source, cm_opts).map(stream_filter(&flags)),
             &mut buf,
-        );
-        return buf;
+            cm_opts,
+        )?;
+        return Ok(buf);
     }
 
     let events = apply_filters(content_events(source, cm_opts).collect(), &flags);
-    cmark_write(events.into_iter(), &mut buf);
-    buf
+    markdown::render(&events, markdown::serializer_options(cm_opts, &flags))
 }
 
 fn render_to_plain_text(source: &str, cm_opts: pulldown_cmark::Options, flags: Flags) -> String {
@@ -446,8 +452,4 @@ pub fn apply_post_handler_filters<'a>(mut events: Vec<Event<'a>>, flags: &Flags)
     }
 
     events
-}
-
-fn cmark_write<'a, I: Iterator<Item = Event<'a>>>(events: I, buf: &mut String) {
-    pulldown_cmark_to_cmark::cmark(events, buf).expect("markdown serialization failed");
 }
